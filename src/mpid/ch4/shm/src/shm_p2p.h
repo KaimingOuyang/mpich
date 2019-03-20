@@ -323,9 +323,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_irecv(void *buf, MPI_Aint count, MPI_
         bool recvd_flag = false;
 
         *request = unexp_req;
-        /* Mark as DEQUEUED so progress engine can complete a matched BUSY
-         * rreq once all data arrived */
-        MPIDIG_REQUEST(unexp_req, req->status) |= MPIDIG_REQ_UNEXP_DQUED;
+        /* - Mark as DEQUEUED so that progress engine can complete a matched BUSY
+         * rreq once all data arrived;
+         * - Mark as IN_PRORESS so that the SHM receive cannot be cancelled. */
+        MPIDIG_REQUEST(unexp_req, req->status) |= MPIDIG_REQ_UNEXP_DQUED | MPIDIG_REQ_IN_PROGRESS;
         MPIR_Comm_release(root_comm);   /* -1 for removing from unexp_list */
 
         /* Try shmmod specific matched receive */
