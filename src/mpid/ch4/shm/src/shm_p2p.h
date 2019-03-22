@@ -356,6 +356,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_irecv(void *buf, MPI_Aint count, MPI_
         MPIDIG_enqueue_posted(rreq, &MPIDIG_COMM(root_comm, posted_list));
 
         *request = rreq;
+        MPIDI_POSIX_recv_posted_hook(*request, rank, comm);
     }
 #else /* default */
     mpi_errno = MPIDI_POSIX_mpi_irecv(buf, count, datatype, rank, tag,
