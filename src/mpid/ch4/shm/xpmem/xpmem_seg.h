@@ -33,8 +33,8 @@ enum {
         stack[stack##_sp++] = value;                            \
 } while (0)
 #define MPIDI_XPMEM_AVL_STACK_POP(stack, value) do {   \
-        MPIR_Assert(--stack##_sp >= 0);                \
-        value = stack[stack##_sp];                     \
+        MPIR_Assert(stack##_sp > 0);                   \
+        value = stack[--stack##_sp];                   \
 } while (0)
 #define MPIDI_XPMEM_AVL_STACK_EMPTY(stack) (!stack##_sp)
 
