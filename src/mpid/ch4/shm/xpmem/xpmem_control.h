@@ -14,43 +14,25 @@
 #include "xpmem_pre.h"
 #include "xpmem_impl.h"
 #include "xpmem_recv.h"
+#include "xpmem_send.h"
+#include "datatype.h"
+
 
 #undef FUNCNAME
-#define FUNCNAME MPIDI_XPMEM_ctrl_send_lmt_ack_cb
+#define FUNCNAME MPIDI_XPMEM_ctrl_do_send_lmt_req_cb
 #undef FCNAME
 #define FCNAME MPL_QUOTE(FUNCNAME)
-MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_ack_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_do_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
 {
-    int mpi_errno = MPI_SUCCESS;
-    MPIR_Request *sreq = (MPIR_Request *) ctrl_hdr->xpmem_slmt_ack.sreq_ptr;
-
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
-
-    XPMEM_PT2PT_DBG_PRINT("send_lmt_ack_cb: complete sreq %p\n", sreq);
-    MPID_Request_complete(sreq);
-
-  fn_exit:
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
-    return mpi_errno;
-  fn_fail:
-    goto fn_exit;
-}
-
-#undef FUNCNAME
-#define FUNCNAME MPIDI_XPMEM_ctrl_send_lmt_req_cb
-#undef FCNAME
-#define FCNAME MPL_QUOTE(FUNCNAME)
-MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
-{
-    int mpi_errno = MPI_SUCCESS;
+    int mpi_errno = MPI_SUCCESS, recvtype_iscontig;
     MPIDI_SHM_ctrl_xpmem_send_lmt_req_t *slmt_req_hdr = &ctrl_hdr->xpmem_slmt_req;
     MPIR_Request *rreq = NULL;
     MPIR_Comm *root_comm;
+    MPIDI_av_entry_t *av;
     MPIR_Request *anysource_partner;
 
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_SEND_LMT_REQ_CB);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_SEND_LMT_REQ_CB);
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_DO_SEND_LMT_REQ_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_DO_SEND_LMT_REQ_CB);
 
     XPMEM_PT2PT_DBG_PRINT
         ("send_lmt_req_cb: received src_offset 0x%lx, data_sz 0x%lx, sreq_ptr 0x%lx, "
@@ -99,15 +81,49 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr
 
     if (rreq) {
         /* Matching receive was posted */
-        MPIR_Comm_release(root_comm);   /* -1 for posted_list */
         MPIDIG_REQUEST(rreq, rank) = slmt_req_hdr->src_rank;
         MPIDIG_REQUEST(rreq, tag) = slmt_req_hdr->tag;
         MPIDIG_REQUEST(rreq, context_id) = slmt_req_hdr->context_id;
 
         /* Complete XPMEM receive */
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        /* TODO: need to support non-contig datatype on receiver side. */
+        MPIR_Datatype_iscontig(MPIDIG_REQUEST(rreq, datatype), &recvtype_iscontig);
+        if (recvtype_iscontig) {
+            MPIDI_XPMEM_REQUEST(rreq, counter) =
+                &MPIDI_XPMEM_global.coop_counter[MPIDI_XPMEM_global.local_rank *
+                                                 MPIDI_XPMEM_global.num_local +
+                                                 slmt_req_hdr->src_lrank];
+
+            av = MPIDIU_comm_rank_to_av(root_comm, slmt_req_hdr->src_rank);
+            MPIDI_XPMEM_REQUEST(rreq, sreq_ptr) = slmt_req_hdr->sreq_ptr;
+
+            mpi_errno = MPIDI_XPMEM_lmt_coop_isend(MPIDIG_REQUEST(rreq, buffer),
+                                                   MPIDIG_REQUEST(rreq, count),
+                                                   MPIDIG_REQUEST(rreq, datatype),
+                                                   slmt_req_hdr->src_rank, slmt_req_hdr->tag,
+                                                   root_comm, MPIR_CONTEXT_INTRA_PT2PT, av,
+                                                   MPIDI_SHM_XPMEM_SEND_LMT_CTS, &rreq);
+            if (MPI_SUCCESS != mpi_errno)
+                MPIR_ERR_POP(mpi_errno);
+        } else {
+            MPIDI_XPMEM_REQUEST(rreq, counter) = NULL;
+        }
+
+        mpi_errno =
+            MPIDI_XPMEM_handle_lmt_coop_recv(slmt_req_hdr->src_offset, slmt_req_hdr->data_sz,
+                                             slmt_req_hdr->sreq_ptr, slmt_req_hdr->src_lrank,
+                                             MPIDI_SHM_XPMEM_SEND_LMT_RTS, rreq);
+        if (MPI_SUCCESS != mpi_errno)
+            MPIR_ERR_POP(mpi_errno);
+#else
         mpi_errno = MPIDI_XPMEM_handle_lmt_recv(slmt_req_hdr->src_offset, slmt_req_hdr->data_sz,
                                                 slmt_req_hdr->sreq_ptr, slmt_req_hdr->src_lrank,
                                                 rreq);
+#endif
+
+        MPIR_Comm_release(root_comm);   /* -1 for posted_list */
+
         if (MPI_SUCCESS != mpi_errno)
             MPIR_ERR_POP(mpi_errno);
     } else {
@@ -127,7 +143,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr
         /* store XPMEM internal info */
         MPIDI_XPMEM_REQUEST(rreq, unexp_rreq).src_offset = slmt_req_hdr->src_offset;
         MPIDI_XPMEM_REQUEST(rreq, unexp_rreq).data_sz = slmt_req_hdr->data_sz;
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        MPIDI_XPMEM_REQUEST(rreq, sreq_ptr) = slmt_req_hdr->sreq_ptr;
+#else
         MPIDI_XPMEM_REQUEST(rreq, unexp_rreq).sreq_ptr = slmt_req_hdr->sreq_ptr;
+#endif
         MPIDI_XPMEM_REQUEST(rreq, unexp_rreq).src_lrank = slmt_req_hdr->src_lrank;
         MPIDI_SHM_REQUEST(rreq, status) |= MPIDI_SHM_REQ_XPMEM_SEND_LMT;
 
@@ -141,6 +161,166 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr
 
         XPMEM_PT2PT_DBG_PRINT("send_lmt_req_cb: enqueue unexpected, rreq=%p\n", rreq);
     }
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_DO_SEND_LMT_REQ_CB);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+
+#undef FUNCNAME
+#define FUNCNAME MPIDI_XPMEM_ctrl_send_lmt_ack_cb
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_ack_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_Request *sreq = (MPIR_Request *) ctrl_hdr->xpmem_slmt_ack.sreq_ptr;
+
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
+
+    XPMEM_PT2PT_DBG_PRINT("send_lmt_ack_cb: complete sreq %p\n", sreq);
+    MPID_Request_complete(sreq);
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+#undef FUNCNAME
+#define FUNCNAME MPIDI_XPMEM_ctrl_recv_lmt_ack_cb
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_recv_lmt_ack_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_Request *rreq = (MPIR_Request *) ctrl_hdr->xpmem_slmt_ack.sreq_ptr;
+    MPIDI_XPMEM_am_dmessage_t *dmessage;
+    MPIDI_SHM_ctrl_xpmem_send_lmt_req_t *slmt_req_hdr;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_RECV_LMT_ACK_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_RECV_LMT_ACK_CB);
+
+    XPMEM_PT2PT_DBG_PRINT("recv_lmt_ack_cb: complete rreq %p\n", rreq);
+
+    if (MPIDI_XPMEM_REQUEST(rreq, counter)) {
+        MPIR_Datatype_release_if_not_builtin(MPIDIG_REQUEST(rreq, datatype));
+        OPA_store_int(MPIDI_XPMEM_REQUEST(rreq, counter), 0);
+    }
+
+    MPID_Request_complete(rreq);
+
+    if (MPIDI_XPMEM_global.dmessage_queue) {
+        dmessage = MPIDI_XPMEM_global.dmessage_queue;
+        slmt_req_hdr = &dmessage->ctrl_hdr.xpmem_slmt_req;
+        if (!OPA_load_int
+            (&MPIDI_XPMEM_global.coop_counter
+             [MPIDI_XPMEM_global.local_rank * MPIDI_XPMEM_global.num_local +
+              slmt_req_hdr->src_lrank])) {
+            mpi_errno = MPIDI_XPMEM_ctrl_do_send_lmt_req_cb(&dmessage->ctrl_hdr);
+            DL_DELETE(MPIDI_XPMEM_global.dmessage_queue, dmessage);
+            MPL_free(dmessage);
+        }
+    }
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_RECV_LMT_ACK_CB);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+
+#undef FUNCNAME
+#define FUNCNAME MPIDI_XPMEM_ctrl_send_lmt_rts_req_cb
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_rts_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIDI_XPMEM_am_dmessage_t *dmessage;
+    MPIDI_SHM_ctrl_xpmem_send_lmt_req_t *slmt_req_hdr =
+        &((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr)->xpmem_slmt_req;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_CTRL_SEND_LMT_RTS_REQ_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_CTRL_SEND_LMT_RTS_REQ_CB);
+
+    if (OPA_load_int(&MPIDI_XPMEM_global.coop_counter
+                     [MPIDI_XPMEM_global.local_rank * MPIDI_XPMEM_global.num_local +
+                      slmt_req_hdr->src_lrank])) {
+        /* Previous copy is not done, need to delay current copy to next round. */
+        dmessage =
+            (MPIDI_XPMEM_am_dmessage_t *) MPL_malloc(sizeof(MPIDI_XPMEM_am_dmessage_t),
+                                                     MPL_MEM_OTHER);
+        MPIR_ERR_CHKANDJUMP(dmessage == NULL, mpi_errno, MPI_ERR_NO_MEM, "**nomem");
+
+        MPIR_Memcpy(&dmessage->ctrl_hdr, ctrl_hdr, sizeof(MPIDI_SHM_ctrl_hdr_t));
+        DL_APPEND(MPIDI_XPMEM_global.dmessage_queue, dmessage);
+    } else {
+        mpi_errno = MPIDI_XPMEM_ctrl_do_send_lmt_req_cb(ctrl_hdr);
+        if (MPI_SUCCESS != mpi_errno)
+            MPIR_ERR_POP(mpi_errno);
+    }
+
+  fn_exit:
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+
+#undef FUNCNAME
+#define FUNCNAME MPIDI_XPMEM_ctrl_send_lmt_cts_req_cb
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_cts_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_Request *sreq;
+    MPIDI_SHM_ctrl_xpmem_send_lmt_req_t *slmt_req_hdr = &ctrl_hdr->xpmem_slmt_req;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_CTRL_SEND_LMT_CTS_REQ_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_CTRL_SEND_LMT_CTS_REQ_CB);
+
+    /* Sender gets the CTS packet from receiver and need to perform copy */
+    sreq = (MPIR_Request *) slmt_req_hdr->sreq_ptr;
+    MPIDIG_REQUEST(sreq, rank) = slmt_req_hdr->src_rank;
+    MPIDIG_REQUEST(sreq, tag) = slmt_req_hdr->tag;
+    MPIDIG_REQUEST(sreq, context_id) = slmt_req_hdr->context_id;
+
+    /* Complete XPMEM receive */
+    mpi_errno =
+        MPIDI_XPMEM_handle_lmt_coop_recv(slmt_req_hdr->src_offset, slmt_req_hdr->data_sz,
+                                         slmt_req_hdr->rreq_ptr, slmt_req_hdr->src_lrank,
+                                         MPIDI_SHM_XPMEM_SEND_LMT_CTS, sreq);
+    if (MPI_SUCCESS != mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_XPMEM_CTRL_SEND_LMT_CTS_REQ_CB);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+#endif /* MPIDI_CH4_SHM_XPMEM_COOP_P2P */
+
+#undef FUNCNAME
+#define FUNCNAME MPIDI_XPMEM_ctrl_send_lmt_req_cb
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_SEND_LMT_REQ_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_SEND_LMT_REQ_CB);
+
+    mpi_errno = MPIDI_XPMEM_ctrl_do_send_lmt_req_cb(ctrl_hdr);
+    if (MPI_SUCCESS != mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_SEND_LMT_REQ_CB);

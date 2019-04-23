@@ -65,23 +65,59 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mmods_try_matched_recv(void *buf,
                                                               MPIR_Request * message,
                                                               bool * recvd_flag)
 {
-    int mpi_errno = MPI_SUCCESS;
+    int mpi_errno = MPI_SUCCESS, recvtype_iscontig;
+    MPIDI_XPMEM_am_unexp_rreq_t *unexp_rreq;
+    MPIR_Comm *root_comm = NULL;
+    MPIDI_av_entry_t *av = NULL;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MMODS_TRY_MATCHED_RECV);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MMODS_TRY_MATCHED_RECV);
 
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
     /* XPMEM special receive */
     if (MPIDI_SHM_REQUEST(message, status) & MPIDI_SHM_REQ_XPMEM_SEND_LMT) {
+        unexp_rreq = &MPIDI_XPMEM_REQUEST(message, unexp_rreq);
+
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        MPIR_Datatype_iscontig(datatype, &recvtype_iscontig);
+        if (recvtype_iscontig) {
+            MPIDI_XPMEM_REQUEST(message, counter) =
+                &MPIDI_XPMEM_global.coop_counter[MPIDI_XPMEM_global.local_rank *
+                                                 MPIDI_XPMEM_global.num_local +
+                                                 unexp_rreq->src_lrank];
+
+            root_comm = MPIDIG_context_id_to_comm(MPIDIG_REQUEST(message, context_id));
+            av = MPIDIU_comm_rank_to_av(root_comm, MPIDIG_REQUEST(message, rank));
+
+            mpi_errno = MPIDI_XPMEM_lmt_coop_isend(buf,
+                                                   count, datatype,
+                                                   MPIDIG_REQUEST(message, rank),
+                                                   MPIDIG_REQUEST(message, tag), root_comm,
+                                                   MPIR_CONTEXT_INTRA_PT2PT, av,
+                                                   MPIDI_SHM_XPMEM_SEND_LMT_CTS, &message);
+            if (MPI_SUCCESS != mpi_errno)
+                MPIR_ERR_POP(mpi_errno);
+        } else {
+            MPIDI_XPMEM_REQUEST(message, counter) = NULL;
+        }
+#endif
+
         /* Matching XPMEM LMT receive is now posted */
         MPIR_Datatype_add_ref_if_not_builtin(datatype); /* will -1 once completed in handle_lmt_recv */
         MPIDIG_REQUEST(message, datatype) = datatype;
         MPIDIG_REQUEST(message, buffer) = (char *) buf;
         MPIDIG_REQUEST(message, count) = count;
 
-        MPIDI_XPMEM_am_unexp_rreq_t *unexp_rreq = &MPIDI_XPMEM_REQUEST(message, unexp_rreq);
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        mpi_errno = MPIDI_XPMEM_handle_lmt_coop_recv(unexp_rreq->src_offset,
+                                                     unexp_rreq->data_sz,
+                                                     MPIDI_XPMEM_REQUEST(message, sreq_ptr),
+                                                     unexp_rreq->src_lrank,
+                                                     MPIDI_SHM_XPMEM_SEND_LMT_RTS, message);
+#else
         mpi_errno = MPIDI_XPMEM_handle_lmt_recv(unexp_rreq->src_offset,
                                                 unexp_rreq->data_sz, unexp_rreq->sreq_ptr,
                                                 unexp_rreq->src_lrank, message);
+#endif
         if (mpi_errno)
             MPIR_ERR_POP(mpi_errno);
 
@@ -224,8 +260,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_isend(const void *buf, MPI_Aint count
 
     MPIDI_Datatype_check_contig_size(datatype, count, dt_contig, data_sz);
     if (dt_contig && data_sz > MPIR_CVAR_CH4_XPMEM_LMT_MSG_SIZE) {
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        mpi_errno = MPIDI_XPMEM_lmt_coop_isend(buf, count, datatype, rank, tag, comm,
+                                               context_offset, addr, MPIDI_SHM_XPMEM_SEND_LMT_RTS,
+                                               request);
+#else
         mpi_errno = MPIDI_XPMEM_lmt_isend(buf, count, datatype, rank, tag, comm,
                                           context_offset, addr, request);
+#endif
         goto fn_exit;
     }
 #endif /* end of MPIDI_CH4_SHM_ENABLE_XPMEM */

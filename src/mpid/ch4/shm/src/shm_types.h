@@ -16,6 +16,11 @@ typedef enum {
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
     MPIDI_SHM_XPMEM_SEND_LMT_REQ,
     MPIDI_SHM_XPMEM_SEND_LMT_ACK,
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+    MPIDI_SHM_XPMEM_SEND_LMT_RTS,
+    MPIDI_SHM_XPMEM_SEND_LMT_CTS,
+    MPIDI_SHM_XPMEM_RECV_LMT_ACK,
+#endif
 #endif
     MPIDI_SHM_CTRL_IDS_MAX
 } MPIDI_SHM_ctrl_id_t;
@@ -25,6 +30,7 @@ typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_req {
     uint64_t src_offset;        /* send data starting address (buffer + true_lb) */
     uint64_t data_sz;           /* data size in bytes */
     uint64_t sreq_ptr;          /* send request pointer */
+    uint64_t rreq_ptr;          /* send request pointer */
     int src_lrank;              /* sender rank on local node */
 
     /* matching info */

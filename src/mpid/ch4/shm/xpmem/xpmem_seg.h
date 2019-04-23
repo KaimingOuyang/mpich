@@ -90,6 +90,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_seg_do_create(MPIDI_XPMEM_seg_t ** seg_
 
     xpmem_addr.apid = apid;
     xpmem_addr.offset = seg->low;
+    // printf("apid %lx, high %ld, low %ld\n", apid, high, low);
+    // fflush(stdout);
     seg->vaddr = xpmem_attach(xpmem_addr, high - low, NULL);
     /* virtual address or failure(-1) */
     MPIR_ERR_CHKANDJUMP(seg->vaddr == (void *) -1, mpi_errno, MPI_ERR_OTHER, "**xpmem_attach");

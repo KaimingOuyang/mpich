@@ -13,11 +13,18 @@
 #define SHM_CONTROL_H_INCLUDED
 
 #include "shm_types.h"
+#include "../xpmem/xpmem_pre.h"
 #include "../posix/posix_am.h"
 
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
 MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_ack_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_recv_lmt_ack_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_rts_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_cts_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+#else
 MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+#endif
 #endif
 
 #undef FUNCNAME
@@ -27,22 +34,43 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ctrl_send_lmt_req_cb(MPIDI_SHM_ctrl_hdr
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_ctrl_dispatch(int ctrl_id, void *ctrl_hdr)
 {
     int mpi_errno = MPI_SUCCESS;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_XPMEM_CTRL_DISPATCH);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_DISPATCH);
 
     switch (ctrl_id) {
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        case MPIDI_SHM_XPMEM_SEND_LMT_RTS:
+            MPIDI_XPMEM_ctrl_send_lmt_rts_req_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+            break;
+        case MPIDI_SHM_XPMEM_SEND_LMT_CTS:
+            MPIDI_XPMEM_ctrl_send_lmt_cts_req_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+            break;
+#else
         case MPIDI_SHM_XPMEM_SEND_LMT_REQ:
             MPIDI_XPMEM_ctrl_send_lmt_req_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
             break;
+#endif
         case MPIDI_SHM_XPMEM_SEND_LMT_ACK:
             MPIDI_XPMEM_ctrl_send_lmt_ack_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
             break;
+#ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        case MPIDI_SHM_XPMEM_RECV_LMT_ACK:
+            MPIDI_XPMEM_ctrl_recv_lmt_ack_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+            break;
+#endif
+
 #endif
         default:
             /* Unknown SHM control header */
             MPIR_Assert(0);
     }
 
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_DISPATCH);
     return mpi_errno;
+  fn_fail:
+    goto fn_exit;
 }
 
 #undef FUNCNAME
