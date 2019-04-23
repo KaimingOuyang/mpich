@@ -29,7 +29,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_recv_unsafe(void *buf,
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_RECV_UNSAFE);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_RECV_UNSAFE);
-
+    recv_type = MPIDI_RECV_TYPE;
 #ifdef MPIDI_CH4_DIRECT_NETMOD
     mpi_errno =
         MPIDI_NM_mpi_recv(buf, count, datatype, rank, tag, comm, context_offset, av, status,
@@ -110,7 +110,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_irecv_unsafe(void *buf,
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IRECV_UNSAFE);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IRECV_UNSAFE);
 
-
+    recv_type = MPIDI_IRECV_TYPE;
 #ifdef MPIDI_CH4_DIRECT_NETMOD
     mpi_errno =
         MPIDI_NM_mpi_irecv(buf, count, datatype, rank, tag, comm, context_offset, av, request);

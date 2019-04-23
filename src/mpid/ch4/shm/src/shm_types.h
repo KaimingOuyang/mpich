@@ -32,6 +32,7 @@ typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_req {
     uint64_t sreq_ptr;          /* send request pointer */
     uint64_t rreq_ptr;          /* send request pointer */
     int src_lrank;              /* sender rank on local node */
+    int call_type;              /* send/recv function type */
 
     /* matching info */
     int src_rank;

@@ -106,12 +106,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_lmt_coop_isend(const void *buf, MPI_Ain
         *request = sreq;
 
         slmt_req_hdr->sreq_ptr = (uint64_t) sreq;
+        slmt_req_hdr->call_type = send_type;
         MPIDIG_REQUEST(sreq, buffer) = (void *) buf;
         MPIDIG_REQUEST(sreq, datatype) = datatype;
         MPIDIG_REQUEST(sreq, count) = count;
         MPIDI_XPMEM_REQUEST(sreq, counter) = NULL;
+        MPIDI_XPMEM_REQUEST(sreq, call_type) = send_type;
     } else {
         /* Receiver replies CTS packet */
+        slmt_req_hdr->call_type = MPIDI_XPMEM_REQUEST(*request, call_type);
         slmt_req_hdr->sreq_ptr = MPIDI_XPMEM_REQUEST(*request, sreq_ptr);
         slmt_req_hdr->rreq_ptr = (uint64_t) * request;
     }

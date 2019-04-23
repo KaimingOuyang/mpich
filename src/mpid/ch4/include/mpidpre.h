@@ -42,6 +42,16 @@
 #error "Unknown MT model or MT model not defined"
 #endif
 
+enum {
+    MPIDI_ISEND_TYPE,
+    MPIDI_SEND_TYPE,
+    MPIDI_IRECV_TYPE,
+    MPIDI_RECV_TYPE,
+    MPIDI_SEND_COPY,
+    MPIDI_RECV_COPY,
+    MPIDI_COOP_COPY
+};
+
 typedef struct {
 #ifdef HAVE_LIBHCOLL
     hcoll_datatype_t hcoll_datatype;

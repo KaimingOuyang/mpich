@@ -16,6 +16,9 @@
 #include <mpidimpl.h>
 #include "ch4_impl.h"
 
+int send_type;
+int recv_type;
+
 MPIDI_CH4_Global_t MPIDI_global;
 MPIDI_av_table_t **MPIDI_av_table;
 MPIDI_av_table_t *MPIDI_av_table0;

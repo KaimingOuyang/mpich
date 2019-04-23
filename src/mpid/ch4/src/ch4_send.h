@@ -35,10 +35,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_send_unsafe(const void *buf,
         MPIDI_NM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, av, request);
 #else
     int r;
-    if ((r = MPIDI_av_is_local(av)))
+    if ((r = MPIDI_av_is_local(av))) {
+        send_type = MPIDI_SEND_TYPE;
         mpi_errno =
             MPIDI_SHM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, av, request);
-    else
+    } else
         mpi_errno =
             MPIDI_NM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, av, request);
     if (mpi_errno == MPI_SUCCESS && *request)
@@ -78,10 +79,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_isend_unsafe(const void *buf,
         MPIDI_NM_mpi_isend(buf, count, datatype, rank, tag, comm, context_offset, av, request);
 #else
     int r;
-    if ((r = MPIDI_av_is_local(av)))
+    if ((r = MPIDI_av_is_local(av))) {
+        send_type = MPIDI_ISEND_TYPE;
         mpi_errno =
             MPIDI_SHM_mpi_isend(buf, count, datatype, rank, tag, comm, context_offset, av, request);
-    else
+    } else
         mpi_errno =
             MPIDI_NM_mpi_isend(buf, count, datatype, rank, tag, comm, context_offset, av, request);
     if (mpi_errno == MPI_SUCCESS)

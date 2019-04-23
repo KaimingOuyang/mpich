@@ -80,6 +80,7 @@ typedef struct {
 #ifndef MPIDI_CH4_SHM_XPMEM_COOP_P2P
     uint64_t sreq_ptr;
 #endif
+    int call_type;
     int src_lrank;
 } MPIDI_XPMEM_am_unexp_rreq_t;
 
@@ -88,6 +89,7 @@ typedef struct {
 #ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
     uint64_t sreq_ptr;
     OPA_int_t *counter;
+    int call_type;
 #endif
 } MPIDI_XPMEM_am_request_t;
 
