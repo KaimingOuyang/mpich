@@ -142,6 +142,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_coop_recv(uint64_t src_offse
     /* Copy data to receive buffer */
     recv_data_sz = MPL_MIN(src_data_sz, data_sz);
 
+    static int cnt = 0;
     if (packet_type == MPIDI_SHM_XPMEM_SEND_LMT_RTS) {
         copy_method =
             MPIDI_XPMEM_choose_copy_method(call_type, MPIDI_XPMEM_REQUEST(req, call_type));
@@ -154,20 +155,22 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_coop_recv(uint64_t src_offse
         req->status.MPI_TAG = MPIDIG_REQUEST(req, tag);
         dest_rbuf = MPIDIG_REQUEST(req, buffer);
         ack_type = MPIDI_SHM_XPMEM_SEND_LMT_ACK;
-
         switch (copy_method) {
             case MPIDI_COOP_COPY:
                 cur_offset = recv_data_sz >> 1;
                 copy_sz = recv_data_sz - (recv_data_sz >> 1);
-                printf("receiver %d - perform coop copy %ld\n", MPIDI_XPMEM_global.local_rank, copy_sz);
-                fflush(stdout);
-                mpi_errno = MPIR_Localcopy((char*)attached_sbuf + cur_offset, copy_sz,
-                                           MPI_BYTE, (char*) dest_rbuf + cur_offset, copy_sz, MPI_BYTE);
+                // printf("receiver %d - perform coop copy %ld, cnt %d\n",
+                //        MPIDI_XPMEM_global.local_rank, copy_sz, cnt++);
+                // fflush(stdout);
+                mpi_errno = MPIR_Localcopy((char *) attached_sbuf + cur_offset, copy_sz,
+                                           MPI_BYTE, (char *) dest_rbuf + cur_offset, copy_sz,
+                                           MPI_BYTE);
                 break;
             case MPIDI_RECV_COPY:
                 copy_sz = recv_data_sz;
-                printf("receiver %d - perform single copy %ld\n", MPIDI_XPMEM_global.local_rank, copy_sz);
-                fflush(stdout);
+                // printf("receiver %d - perform single copy %ld, cnt %d\n",
+                //        MPIDI_XPMEM_global.local_rank, copy_sz, cnt++);
+                // fflush(stdout);
                 mpi_errno = MPIR_Localcopy(attached_sbuf, copy_sz,
                                            MPI_BYTE, dest_rbuf, copy_sz, MPI_BYTE);
                 break;
@@ -186,15 +189,17 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_coop_recv(uint64_t src_offse
         switch (copy_method) {
             case MPIDI_COOP_COPY:
                 copy_sz = recv_data_sz >> 1;
-                printf("sender %d - perform coop copy %ld\n", MPIDI_XPMEM_global.local_rank, copy_sz);
-                fflush(stdout);
+                // printf("sender %d - perform coop copy %ld, cnt %d\n", MPIDI_XPMEM_global.local_rank,
+                //        copy_sz, cnt++);
+                // fflush(stdout);
                 mpi_errno = MPIR_Localcopy(attached_sbuf, copy_sz,
                                            MPI_BYTE, dest_rbuf, copy_sz, MPI_BYTE);
                 break;
             case MPIDI_SEND_COPY:
                 copy_sz = recv_data_sz;
-                printf("sender %d - perform single copy %ld\n", MPIDI_XPMEM_global.local_rank, copy_sz);
-                fflush(stdout);
+                // printf("sender %d - perform single copy %ld, cnt %d\n",
+                //        MPIDI_XPMEM_global.local_rank, copy_sz, cnt++);
+                // fflush(stdout);
                 mpi_errno = MPIR_Localcopy(attached_sbuf, copy_sz,
                                            MPI_BYTE, dest_rbuf, copy_sz, MPI_BYTE);
                 break;

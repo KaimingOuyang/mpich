@@ -77,6 +77,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mmods_try_matched_recv(void *buf,
     if (MPIDI_SHM_REQUEST(message, status) & MPIDI_SHM_REQ_XPMEM_SEND_LMT) {
         unexp_rreq = &MPIDI_XPMEM_REQUEST(message, unexp_rreq);
 #ifdef MPIDI_CH4_SHM_XPMEM_COOP_P2P
+        printf("rank %d - unexpected message impossible\n", MPIDI_XPMEM_global.local_rank);
+        fflush(stdout);
         MPIDI_XPMEM_REQUEST(message, call_type) = recv_type;
         MPIR_Datatype_iscontig(datatype, &recvtype_iscontig);
         if (recvtype_iscontig) {
@@ -389,8 +391,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_irecv(void *buf, MPI_Aint count, MPI_
         rreq = MPIDIG_request_create(MPIR_REQUEST_KIND__RECV, 2);
         MPIR_ERR_CHKANDSTMT(rreq == NULL, mpi_errno, MPIX_ERR_NOREQ, goto fn_fail, "**nomemreq");
 
-        MPIR_Datatype_add_ref_if_not_builtin(datatype);
+        /* store call type of receive */
         MPIDI_XPMEM_REQUEST(rreq, call_type) = recv_type;
+
+        MPIR_Datatype_add_ref_if_not_builtin(datatype);
         mpi_errno = MPIDIG_prepare_recv_req(rank, tag, context_id, buf, count, datatype, rreq);
         if (mpi_errno)
             MPIR_ERR_POP(mpi_errno);

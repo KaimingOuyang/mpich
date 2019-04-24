@@ -36,7 +36,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_send_unsafe(const void *buf,
 #else
     int r;
     if ((r = MPIDI_av_is_local(av))) {
-        send_type = MPIDI_SEND_TYPE;
         mpi_errno =
             MPIDI_SHM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, av, request);
     } else
@@ -80,7 +79,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_isend_unsafe(const void *buf,
 #else
     int r;
     if ((r = MPIDI_av_is_local(av))) {
-        send_type = MPIDI_ISEND_TYPE;
         mpi_errno =
             MPIDI_SHM_mpi_isend(buf, count, datatype, rank, tag, comm, context_offset, av, request);
     } else
@@ -365,7 +363,7 @@ MPL_STATIC_INLINE_PREFIX int MPID_Send(const void *buf,
     MPIDI_av_entry_t *av = NULL;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_SEND);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_SEND);
-
+    send_type = MPIDI_SEND_TYPE;
     if (unlikely(rank == MPI_PROC_NULL)) {
         *request = MPIR_Request_create_complete(MPIR_REQUEST_KIND__SEND);
         MPIR_ERR_CHKANDSTMT(*request == NULL, mpi_errno, MPIX_ERR_NOREQ, goto fn_fail,
@@ -402,7 +400,7 @@ MPL_STATIC_INLINE_PREFIX int MPID_Isend(const void *buf,
     MPIDI_av_entry_t *av = NULL;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_ISEND);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_ISEND);
-
+    send_type = MPIDI_ISEND_TYPE;
     if (unlikely(rank == MPI_PROC_NULL)) {
         *request = MPIR_Request_create_complete(MPIR_REQUEST_KIND__SEND);
         MPIR_ERR_CHKANDSTMT(*request == NULL, mpi_errno, MPIX_ERR_NOREQ, goto fn_fail,
