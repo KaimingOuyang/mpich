@@ -8,9 +8,13 @@
 #define XPMEM_PRE_H_INCLUDED
 
 #include <xpmem.h>
+#include "shm_types.h"
 
+// #define MPIDI_XPMEM_COOP_COPY_CHUNK_SIZE 32768LL
 #define MPIDI_XPMEM_PERMIT_VALUE ((void *)0600)
 #define MPIDI_XPMEM_SEG_PREALLOC 8      /* Number of segments to preallocate in the "direct" block */
+
+// extern int MPID_CH4_XPMEM_COOP_COPY_CHUNK_SIZE;
 
 typedef struct MPIDI_XPMEM_seg {
     /* AVL-tree internal components start */
@@ -38,6 +42,11 @@ typedef struct {
     MPIDI_XPMEM_segtree_t segcache;     /* AVL tree based segment cache */
 } MPIDI_XPMEM_segmap_t;
 
+typedef struct MPIDI_XPMEM_am_dmessage {
+    MPIDI_SHM_ctrl_hdr_t ctrl_hdr;
+    struct MPIDI_XPMEM_am_dmessage *prev, *next;
+} MPIDI_XPMEM_am_dmessage_t;
+
 typedef struct {
     int num_local;
     int local_rank;
@@ -45,6 +54,11 @@ typedef struct {
     xpmem_segid_t segid;        /* my local segid associated with entire address space */
     MPIDI_XPMEM_segmap_t *segmaps;      /* remote seg info for every local processes. */
     size_t sys_page_sz;
+    MPIDI_XPMEM_seg_t *seg_ptr; /* attached cooperative counter segment */
+    OPA_int_t *coop_counter;    /* cooperative counter array (size: num_local^2) */
+    MPIDI_XPMEM_am_dmessage_t *dmessage_queue;  /* used to queue message for delayed
+                                                 * process when previous coop copy
+                                                 * is not finished  */
 } MPIDI_XPMEM_global_t;
 
 typedef struct {
@@ -55,12 +69,13 @@ typedef struct {
 typedef struct {
     uint64_t src_offset;
     uint64_t data_sz;
-    uint64_t sreq_ptr;
     int src_lrank;
 } MPIDI_XPMEM_am_unexp_rreq_t;
 
 typedef struct {
     MPIDI_XPMEM_am_unexp_rreq_t unexp_rreq;
+    uint64_t sreq_ptr;
+    OPA_int_t *counter;
 } MPIDI_XPMEM_am_request_t;
 
 extern MPIDI_XPMEM_global_t MPIDI_XPMEM_global;

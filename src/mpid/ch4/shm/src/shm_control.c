@@ -16,11 +16,17 @@ int MPIDI_SHM_ctrl_dispatch(int ctrl_id, void *ctrl_hdr)
 
     switch (ctrl_id) {
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
-        case MPIDI_SHM_XPMEM_SEND_LMT_REQ:
-            mpi_errno = MPIDI_XPMEM_ctrl_send_lmt_req_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+        case MPIDI_SHM_XPMEM_SEND_LMT_RTS:
+            mpi_errno = MPIDI_XPMEM_ctrl_send_lmt_rts_req_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+            break;
+        case MPIDI_SHM_XPMEM_SEND_LMT_CTS:
+            mpi_errno = MPIDI_XPMEM_ctrl_send_lmt_cts_req_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
             break;
         case MPIDI_SHM_XPMEM_SEND_LMT_ACK:
             mpi_errno = MPIDI_XPMEM_ctrl_send_lmt_ack_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+            break;
+        case MPIDI_SHM_XPMEM_RECV_LMT_ACK:
+            mpi_errno = MPIDI_XPMEM_ctrl_recv_lmt_ack_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
             break;
 #endif
         default:

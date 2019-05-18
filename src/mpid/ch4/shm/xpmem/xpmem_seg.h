@@ -218,6 +218,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_avl_do_right_left_rotation(MPIDI_XPMEM_
     goto fn_exit;
 }
 
+
 /* Create a new segment and initialize tree node attributes */
 MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_segtree_do_create_node(uint64_t low,
                                                                 uint64_t high,

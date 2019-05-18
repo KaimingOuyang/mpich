@@ -17,6 +17,9 @@ typedef enum {
     MPIDI_SHM_XPMEM_SEND_LMT_REQ,       /* issued by sender to initialize a LMT;
                                          * receiver transfers data in callback.  */
     MPIDI_SHM_XPMEM_SEND_LMT_ACK,       /* issued by receiver to notify completion of LMT */
+    MPIDI_SHM_XPMEM_SEND_LMT_RTS,
+    MPIDI_SHM_XPMEM_SEND_LMT_CTS,
+    MPIDI_SHM_XPMEM_RECV_LMT_ACK,
 #endif
     MPIDI_SHM_CTRL_IDS_MAX
 } MPIDI_SHM_ctrl_id_t;
@@ -26,6 +29,7 @@ typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_req {
     uint64_t src_offset;        /* send data starting address (buffer + true_lb) */
     uint64_t data_sz;           /* data size in bytes */
     uint64_t sreq_ptr;          /* send request pointer */
+    uint64_t rreq_ptr;          /* recv request pointer */
     int src_lrank;              /* sender rank on local node */
 
     /* matching info */

@@ -14,6 +14,12 @@ int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag
 {
     int mpi_errno = MPI_SUCCESS;
     int i, my_local_rank = -1, num_local = 0;
+    MPIDU_shm_seg_t shm_seg;
+    MPIDU_shm_barrier_t *shm_seg_barrier = NULL;
+    xpmem_segid_t *xpmem_segids = NULL;
+    MPIDI_XPMEM_seg_t *seg_ptr = NULL;
+    OPA_int_t *coop_counter = NULL;
+    uint64_t *coop_caddr;
     int local_rank_0 = -1;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_INIT_HOOK);
@@ -40,6 +46,33 @@ int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag
     MPIDU_Init_shm_put(&MPIDI_XPMEM_global.segid, sizeof(xpmem_segid_t));
     MPIDU_Init_shm_barrier();
 
+    mpi_errno = MPIDU_shm_seg_alloc(sizeof(uint64_t), (void **) &coop_caddr, MPL_MEM_SHM);
+    if (mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
+
+    mpi_errno = MPIDU_shm_seg_commit(&shm_seg,
+                                     &shm_seg_barrier,
+                                     num_local, my_local_rank, local_rank_0, rank, MPL_MEM_SHM);
+    if (mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
+
+    /* Only rank 0 need to actually allocate an array to store counters and
+     * other processes should attach to this array through MPIDI_XPMEM_seg_regist */
+    if (!my_local_rank) {
+        coop_counter =
+            (OPA_int_t *) MPL_malloc(num_local * num_local * sizeof(OPA_int_t), MPL_MEM_OTHER);
+        MPIR_ERR_CHKANDJUMP(coop_counter == NULL, mpi_errno, MPI_ERR_OTHER, "**nomem");
+
+        for (i = 0; i < num_local * num_local; ++i)
+            OPA_store_int(&coop_counter[i], 0);
+
+        *coop_caddr = (uint64_t) coop_counter;
+    }
+
+    mpi_errno = MPIDU_shm_barrier(shm_seg_barrier, num_local);
+    if (mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
+
     /* Initialize segmap for every local processes */
     MPIDI_XPMEM_global.segmaps = NULL;
     MPIR_CHKPMEM_MALLOC(MPIDI_XPMEM_global.segmaps, MPIDI_XPMEM_segmap_t *,
@@ -56,6 +89,24 @@ int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag
     /* Initialize other global parameters */
     MPIDI_XPMEM_global.sys_page_sz = (size_t) sysconf(_SC_PAGESIZE);
 
+    /* Attach to local root coop_counter array */
+    if (my_local_rank) {
+        mpi_errno =
+            MPIDI_XPMEM_seg_regist(0, num_local * num_local * sizeof(OPA_int_t),
+                                   (void *) *coop_caddr, &seg_ptr, (void **) &coop_counter);
+        if (mpi_errno != MPI_SUCCESS)
+            MPIR_ERR_POP(mpi_errno);
+    }
+
+    /* Initialize other global parameters */
+    MPIDI_XPMEM_global.coop_counter = coop_counter;
+    MPIDI_XPMEM_global.seg_ptr = seg_ptr;
+    MPIDI_XPMEM_global.dmessage_queue = NULL;
+
+    mpi_errno = MPIDU_shm_seg_destroy(&shm_seg, num_local);
+    if (mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
+
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_XPMEM_INIT_HOOK);
     return mpi_errno;
@@ -70,6 +121,15 @@ int MPIDI_XPMEM_mpi_finalize_hook(void)
     int i, ret = 0;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
+
+    /* Free temporary shared buffer */
+    if (MPIDI_XPMEM_global.local_rank) {
+        mpi_errno = MPIDI_XPMEM_seg_deregist(MPIDI_XPMEM_global.seg_ptr);
+        if (mpi_errno != MPI_SUCCESS)
+            MPIR_ERR_POP(mpi_errno);
+    } else {
+        MPL_free(MPIDI_XPMEM_global.coop_counter);
+    }
 
     for (i = 0; i < MPIDI_XPMEM_global.num_local; i++) {
         /* should be called before xpmem_release
