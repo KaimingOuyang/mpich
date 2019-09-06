@@ -16,25 +16,7 @@
 #include "xpmem_impl.h"
 #include "xpmem_send.h"
 
-/*
-=== BEGIN_MPI_T_CVAR_INFO_BLOCK ===
-
-cvars:
-    - name        : MPIR_CVAR_CH4_XPMEM_COOP_COPY_CHUNK_SIZE
-      category    : CH4
-      type        : int
-      default     : 32768
-      class       : device
-      verbosity   : MPI_T_VERBOSITY_USER_BASIC
-      scope       : MPI_T_SCOPE_ALL_EQ
-      description : >-
-        Chunk size is used in XPMEM COOP P2P and determines the concurrency of
-        copy and overhead of atomic per chunk copy. Best chunk size should
-        balance these two factors.
-
-=== END_MPI_T_CVAR_INFO_BLOCK ===
-*/
-
+extern int MPIR_CVAR_CH4_XPMEM_COOP_COPY_CHUNK_SIZE;
 
 /* Handle and complete a matched XPMEM LMT receive request. Input parameters
  * include send buffer info (see definition in MPIDI_SHM_ctrl_xpmem_send_lmt_req_t)

@@ -114,8 +114,12 @@ The Fortran binding for 'MPI_Init' has only the error return
 
 .seealso: MPI_Init_thread, MPI_Finalize
 @*/
+
+int MPIR_CVAR_CH4_XPMEM_COOP_COPY_CHUNK_SIZE;
+
 int MPI_Init(int *argc, char ***argv)
 {
+    MPIR_CVAR_CH4_XPMEM_COOP_COPY_CHUNK_SIZE = atoi(getenv("CHUNK_SIZE"));
     int mpi_errno = MPI_SUCCESS;
     int rc ATTRIBUTE((unused));
     int threadLevel, provided;
