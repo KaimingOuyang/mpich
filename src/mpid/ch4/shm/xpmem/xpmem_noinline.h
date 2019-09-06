@@ -15,4 +15,5 @@ int MPIDI_XPMEM_mpi_finalize_hook(void);
 int MPIDI_XPMEM_mpi_win_create_hook(MPIR_Win * win);
 int MPIDI_XPMEM_mpi_win_free_hook(MPIR_Win * win);
 
+int MPIDI_XPMEM_ctrl_do_send_recv_lmt_ack_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr, int send_flag);
 #endif /* XPMEM_NOINLINE_H_INCLUDED */
