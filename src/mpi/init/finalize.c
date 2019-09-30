@@ -145,8 +145,17 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 .N Errors
 .N MPI_SUCCESS
 @*/
+double syn_time = 0.0, iter = 0.0;
 int MPI_Finalize(void)
 {
+#ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
+    if(MPIR_Process.comm_world->rank == 1)
+      printf("Iter %ld XPMEM-CopyTime %.3lf\n", (long) iter, syn_time / iter);
+#else
+    if(MPIR_Process.comm_world->rank == 0)
+      printf("Iter %ld ch3-SyncTime %.3lf\n", (long) iter, syn_time / iter);
+#endif
+    fflush(stdout);
     int mpi_errno = MPI_SUCCESS;
 #if defined(HAVE_USLEEP) && defined(USE_COVERAGE)
     int rank = 0;

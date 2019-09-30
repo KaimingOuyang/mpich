@@ -73,6 +73,7 @@ int MPID_nem_lmt_pkthandler_init(MPIDI_CH3_PktHandler_Fcn *pktArray[], int array
     goto fn_exit;
 }
 
+extern double syn_time;
 /* MPID_nem_lmt_RndvSend - Send a request to perform a rendezvous send */
 int MPID_nem_lmt_RndvSend(MPIR_Request **sreq_p, const void * buf, MPI_Aint count,
                           MPI_Datatype datatype, int dt_contig ATTRIBUTE((unused)),
@@ -83,6 +84,7 @@ int MPID_nem_lmt_RndvSend(MPIR_Request **sreq_p, const void * buf, MPI_Aint coun
     MPID_PKT_DECL_CAST(upkt, MPID_nem_pkt_lmt_rts_t, rts_pkt);
     MPIDI_VC_t *vc;
     MPIR_Request *sreq =*sreq_p;
+    struct timespec start;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_NEM_LMT_RNDVSEND);
 
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_NEM_LMT_RNDVSEND);
@@ -115,6 +117,8 @@ int MPID_nem_lmt_RndvSend(MPIR_Request **sreq_p, const void * buf, MPI_Aint coun
     sreq->ch.vc = vc;
 
     MPID_THREAD_CS_ENTER(POBJ, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    syn_time -= (double) start.tv_sec * 1e6 + start.tv_nsec / 1e3;
     mpi_errno = vc->ch.lmt_initiate_lmt(vc, &upkt.p, sreq);
     if (MPIR_CVAR_ENABLE_FT) {
         if (MPI_SUCCESS == mpi_errno)
