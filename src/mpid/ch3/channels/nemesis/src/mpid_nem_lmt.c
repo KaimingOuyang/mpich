@@ -73,7 +73,7 @@ int MPID_nem_lmt_pkthandler_init(MPIDI_CH3_PktHandler_Fcn *pktArray[], int array
     goto fn_exit;
 }
 
-extern double syn_time;
+extern double syn_time, iter;
 /* MPID_nem_lmt_RndvSend - Send a request to perform a rendezvous send */
 int MPID_nem_lmt_RndvSend(MPIR_Request **sreq_p, const void * buf, MPI_Aint count,
                           MPI_Datatype datatype, int dt_contig ATTRIBUTE((unused)),
@@ -118,7 +118,9 @@ int MPID_nem_lmt_RndvSend(MPIR_Request **sreq_p, const void * buf, MPI_Aint coun
 
     MPID_THREAD_CS_ENTER(POBJ, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
     clock_gettime(CLOCK_MONOTONIC, &start);
-    syn_time -= (double) start.tv_sec * 1e6 + start.tv_nsec / 1e3;
+    iter += 1.0;
+    if(iter > 100)
+        syn_time -= (double) start.tv_sec * 1e6 + (double) start.tv_nsec / 1e3;
     mpi_errno = vc->ch.lmt_initiate_lmt(vc, &upkt.p, sreq);
     if (MPIR_CVAR_ENABLE_FT) {
         if (MPI_SUCCESS == mpi_errno)

@@ -47,8 +47,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_recv(uint64_t src_offset, ui
                                MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq, datatype));
     clock_gettime(CLOCK_MONOTONIC, &end);
 
-    syn_time += (double) (end.tv_sec - start.tv_sec) * 1e6 + (end.tv_nsec - start.tv_nsec) / 1e3;
     iter += 1.0;
+    if(iter > 100)
+        syn_time += (double) (end.tv_sec - start.tv_sec) * 1e6 + (end.tv_nsec - start.tv_nsec) / 1e3;
 
     XPMEM_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"
                 " copy dst %p, src %p, bytes %ld\n", rreq, MPIDIG_REQUEST(rreq, rank),

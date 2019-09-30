@@ -148,6 +148,7 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 double syn_time = 0.0, iter = 0.0;
 int MPI_Finalize(void)
 {
+    iter -= 100.0;
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
     if(MPIR_Process.comm_world->rank == 1)
       printf("Iter %ld XPMEM-CopyTime %.3lf\n", (long) iter, syn_time / iter);
