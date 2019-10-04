@@ -12,6 +12,14 @@
 #include "xpmem_pre.h"
 #include "xpmem_seg.h"
 #include "xpmem_impl.h"
+#ifdef PAPI_TEST
+#include <papi.h>
+#define NUM_EVENTS 2
+static void papi_print_error(int err){
+    printf("%s\n", PAPI_strerror(err));
+    fflush(stdout);
+}
+#endif
 extern double syn_time, iter;
 /* Handle and complete a matched XPMEM LMT receive request. Input parameters
  * include send buffer info (see definition in MPIDI_SHM_ctrl_xpmem_send_lmt_req_t)
@@ -42,9 +50,27 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_recv(uint64_t src_offset, ui
     recv_data_sz = MPL_MIN(src_data_sz, data_sz);
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
+#ifdef PAPI_TEST
+    int eventset = PAPI_NULL;
+    int events[NUM_EVENTS] = {PAPI_L2_TCM, PAPI_L3_TCM};
+    int retval;
+    if ((retval = PAPI_create_eventset(&eventset)) != PAPI_OK)
+        papi_print_error(retval);
+
+    if((retval = PAPI_add_events(eventset, events, NUM_EVENTS)) != PAPI_OK)
+            papi_print_error(retval);
+
+    if ((retval = PAPI_start(eventset)) != PAPI_OK)
+        papi_print_error(retval);
+#endif
     mpi_errno = MPIR_Localcopy(attached_sbuf, recv_data_sz,
                                MPI_BYTE, (char *) MPIDIG_REQUEST(rreq, buffer),
                                MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq, datatype));
+#ifdef PAPI_TEST
+    long long values[NUM_EVENTS];
+    if ((retval = PAPI_stop(eventset, values)) != PAPI_OK)
+        papi_print_error(retval);
+#endif
     clock_gettime(CLOCK_MONOTONIC, &end);
 
     iter += 1.0;

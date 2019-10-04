@@ -9,7 +9,9 @@
 #include "build_nodemap.h"
 #include "mpidu_init_shm.h"
 #include "xpmem_seg.h"
-
+#ifdef PAPI_TEST
+#include <papi.h>
+#endif
 int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag_bits)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -19,6 +21,15 @@ int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_INIT_HOOK);
     MPIR_CHKPMEM_DECL(1);
+
+#ifdef PAPI_TEST
+    int retval;
+    /* Initialize the PAPI library */
+    retval = PAPI_library_init(PAPI_VER_CURRENT);
+    if (retval != PAPI_VER_CURRENT) {
+        fprintf(stderr, "PAPI library init error!\n");
+    }
+#endif
 
 #ifdef MPL_USE_DBG_LOGGING
     MPIDI_CH4_SHM_XPMEM_GENERAL = MPL_dbg_class_alloc("SHM_XPMEM", "shm_xpmem");

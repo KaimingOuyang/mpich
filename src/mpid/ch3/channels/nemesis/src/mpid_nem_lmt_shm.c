@@ -57,7 +57,7 @@ typedef struct MPID_nem_lmt_shm_wait_element
 
 /* copy buffer in shared memory */
 #define NUM_BUFS 8
-#define MPID_NEM_COPY_BUF_LEN (32 * 1024)
+#define MPID_NEM_COPY_BUF_LEN (64 * 1024)
 
 typedef union
 {
@@ -100,7 +100,7 @@ typedef struct MPID_nem_copy_buf
 
 /* pipeline values : if the data size is less than PIPELINE_THRESHOLD,
    then copy no more than PIPELINE_MAX_SIZE at a time. */
-#define PIPELINE_MAX_SIZE (16 * 1024)
+#define PIPELINE_MAX_SIZE (64 * 1024)
 #define PIPELINE_THRESHOLD (128 * 1024)
 
 
