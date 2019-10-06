@@ -21,6 +21,7 @@ static void papi_print_error(int err){
 }
 #endif
 extern double syn_time, iter;
+extern long long gvalues[2];
 /* Handle and complete a matched XPMEM LMT receive request. Input parameters
  * include send buffer info (see definition in MPIDI_SHM_ctrl_xpmem_send_lmt_req_t)
  * and receive request. */
@@ -51,15 +52,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_recv(uint64_t src_offset, ui
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
 #ifdef PAPI_TEST
-    int eventset = PAPI_NULL;
-    int events[NUM_EVENTS] = {PAPI_L2_TCM, PAPI_L3_TCM};
+    extern int eventset;
     int retval;
-    if ((retval = PAPI_create_eventset(&eventset)) != PAPI_OK)
-        papi_print_error(retval);
-
-    if((retval = PAPI_add_events(eventset, events, NUM_EVENTS)) != PAPI_OK)
-            papi_print_error(retval);
-
     if ((retval = PAPI_start(eventset)) != PAPI_OK)
         papi_print_error(retval);
 #endif
@@ -70,6 +64,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_handle_lmt_recv(uint64_t src_offset, ui
     long long values[NUM_EVENTS];
     if ((retval = PAPI_stop(eventset, values)) != PAPI_OK)
         papi_print_error(retval);
+    gvalues[0] += values[0];
+    gvalues[1] += values[1];
 #endif
     clock_gettime(CLOCK_MONOTONIC, &end);
 

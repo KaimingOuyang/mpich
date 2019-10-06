@@ -11,6 +11,7 @@
 #include "xpmem_seg.h"
 #ifdef PAPI_TEST
 #include <papi.h>
+int eventset = PAPI_NULL;
 #endif
 int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag_bits)
 {
@@ -29,6 +30,13 @@ int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag
     if (retval != PAPI_VER_CURRENT) {
         fprintf(stderr, "PAPI library init error!\n");
     }
+
+    int events[NUM_EVENTS] = {PAPI_L2_TCM, PAPI_L3_TCM};
+    if ((retval = PAPI_create_eventset(&eventset)) != PAPI_OK)
+        papi_print_error(retval);
+
+     if((retval = PAPI_add_events(eventset, events, NUM_EVENTS)) != PAPI_OK)
+            papi_print_error(retval);
 #endif
 
 #ifdef MPL_USE_DBG_LOGGING
