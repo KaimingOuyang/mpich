@@ -518,8 +518,8 @@ int MPIDI_CH3I_Progress (MPID_Progress_state *progress_state, int is_blocking)
                     if (pkt->type == MPIDI_NEM_PKT_LMT_CTS) {
                         struct timespec end;
                         clock_gettime(CLOCK_MONOTONIC, &end);
-                        if(iter > 100)
-                            syn_time += (double) end.tv_sec * 1e6 + (double) end.tv_nsec / 1e3;
+                        // if(iter > 100)
+                        syn_time += (double) end.tv_sec * 1e6 + (double) end.tv_nsec / 1e3;
                     }
                     mpi_errno = pktArray[pkt->type](vc, pkt, cell_buf, &buflen, &rreq);
                     MPIR_ERR_CHECK(mpi_errno);

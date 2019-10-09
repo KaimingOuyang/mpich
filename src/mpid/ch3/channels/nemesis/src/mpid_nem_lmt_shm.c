@@ -8,6 +8,15 @@
 #include "mpid_nem_inline.h"
 #include "mpid_nem_datatypes.h"
 
+#ifdef PAPI_TEST
+#include <papi.h>
+#define NUM_EVENTS 2
+static void papi_print_error(int err){
+    printf("%s\n", PAPI_strerror(err));
+    fflush(stdout);
+}
+#endif
+
 #if defined(MPL_USE_DBG_LOGGING) && 0
 #define DBG_LMT(x) x
 #else
@@ -406,7 +415,8 @@ static int get_next_req(MPIDI_VC_t *vc)
    Note that because segment_pack() copies on basic-datatype granularity,
    (i.e., won't copy three bytes of an int) we may not fill the entire
    buffer each time. */
-
+extern long long gvalues[2];
+extern int eventset;
 static int lmt_shm_send_progress(MPIDI_VC_t *vc, MPIR_Request *req, int *done)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -463,9 +473,26 @@ static int lmt_shm_send_progress(MPIDI_VC_t *vc, MPIR_Request *req, int *done)
         max_pack_bytes = (data_sz - first <= copy_limit) ? data_sz - first : copy_limit;
 
         MPI_Aint actual_pack_bytes;
+#ifdef PAPI_TEST
+        const int lmt_thsd = 32768;
+        if (data_sz > lmt_thsd) {
+            int retval;
+            if ((retval = PAPI_start(eventset)) != PAPI_OK)
+                papi_print_error(retval);
+        }
+#endif
         MPIR_Typerep_pack(req->dev.user_buf, req->dev.user_count, req->dev.datatype, first,
                        (void *)copy_buf->buf[buf_num], max_pack_bytes, &actual_pack_bytes);
-
+#ifdef PAPI_TEST
+        if(data_sz > lmt_thsd){
+            int retval;
+            long long values[NUM_EVENTS];
+            if ((retval = PAPI_stop(eventset, values)) != PAPI_OK)
+                papi_print_error(retval);
+            gvalues[0] += values[0];
+            gvalues[1] += values[1];
+        }
+#endif
         OPA_write_barrier();
         MPIR_Assign_trunc(copy_buf->len[buf_num].val, actual_pack_bytes, int);
 
@@ -552,9 +579,28 @@ static int lmt_shm_recv_progress(MPIDI_VC_t *vc, MPIR_Request *req, int *done)
         last = expected_last = (data_sz - first <= surfeit + len) ? data_sz : first + surfeit + len;
 
         MPI_Aint actual_unpack_bytes;
+#ifdef PAPI_TEST
+        const int lmt_thsd = 32768;
+        extern int eventset;
+        if (data_sz > lmt_thsd) {
+            int retval;
+            if ((retval = PAPI_start(eventset)) != PAPI_OK)
+                papi_print_error(retval);
+        }
+#endif
         MPIR_Typerep_unpack(src_buf, last - first,
                          req->dev.user_buf, req->dev.user_count, req->dev.datatype,
                          first, &actual_unpack_bytes);
+#ifdef PAPI_TEST
+        if(data_sz > lmt_thsd){
+            int retval;
+            long long values[NUM_EVENTS];
+            if ((retval = PAPI_stop(eventset, values)) != PAPI_OK)
+                papi_print_error(retval);
+            gvalues[0] += values[0];
+            gvalues[1] += values[1];
+        }
+#endif
         last = first + actual_unpack_bytes;
 
         MPL_DBG_MSG_FMT(MPIDI_CH3_DBG_CHANNEL, VERBOSE, (MPL_DBG_FDEST, "recvd data.  last=%" PRIdPTR " data_sz=%" PRIdPTR, last, data_sz));

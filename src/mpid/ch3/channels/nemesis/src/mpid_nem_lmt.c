@@ -119,8 +119,8 @@ int MPID_nem_lmt_RndvSend(MPIR_Request **sreq_p, const void * buf, MPI_Aint coun
     MPID_THREAD_CS_ENTER(POBJ, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
     clock_gettime(CLOCK_MONOTONIC, &start);
     iter += 1.0;
-    if(iter > 100)
-        syn_time -= (double) start.tv_sec * 1e6 + (double) start.tv_nsec / 1e3;
+    // if(iter > 100)
+    syn_time -= (double) start.tv_sec * 1e6 + (double) start.tv_nsec / 1e3;
     mpi_errno = vc->ch.lmt_initiate_lmt(vc, &upkt.p, sreq);
     if (MPIR_CVAR_ENABLE_FT) {
         if (MPI_SUCCESS == mpi_errno)

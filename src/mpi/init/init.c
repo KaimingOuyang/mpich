@@ -79,6 +79,15 @@ int MPI_Init(int *argc, char ***argv) __attribute__ ((weak, alias("PMPI_Init")))
 int MPIR_async_thread_initialized = 0;
 #endif
 
+#ifdef PAPI_TEST
+#include <papi.h>
+int eventset = PAPI_NULL;
+#define NUM_EVENTS 2
+static void papi_print_error(int err){
+    printf("%s\n", PAPI_strerror(err));
+    fflush(stdout);
+}
+#endif
 /*@
    MPI_Init - Initialize the MPI execution environment
 
@@ -114,12 +123,29 @@ The Fortran binding for 'MPI_Init' has only the error return
 
 .seealso: MPI_Init_thread, MPI_Finalize
 @*/
+
 int MPI_Init(int *argc, char ***argv)
 {
     int mpi_errno = MPI_SUCCESS;
     int rc ATTRIBUTE((unused));
     int threadLevel, provided;
     MPIR_FUNC_TERSE_INIT_STATE_DECL(MPID_STATE_MPI_INIT);
+
+#ifdef PAPI_TEST
+  int retval;
+  /* Initialize the PAPI library */
+  retval = PAPI_library_init(PAPI_VER_CURRENT);
+  if (retval != PAPI_VER_CURRENT) {
+    fprintf(stderr, "PAPI library init error!\n");
+  }
+
+  int events[NUM_EVENTS] = {PAPI_L2_TCM, PAPI_L3_TCM};
+  if ((retval = PAPI_create_eventset(&eventset)) != PAPI_OK)
+    papi_print_error(retval);
+
+  if ((retval = PAPI_add_events(eventset, events, NUM_EVENTS)) != PAPI_OK)
+    papi_print_error(retval);
+#endif
 
     rc = MPID_Wtime_init();
 #ifdef MPL_USE_DBG_LOGGING

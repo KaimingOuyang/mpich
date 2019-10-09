@@ -156,8 +156,15 @@ int MPI_Finalize(void)
       // printf("Iter %ld XPMEM-CopyTime %.3lf\n", (long) iter, syn_time / iter);
     }
 #else
-    if(MPIR_Process.comm_world->rank == 0)
-      printf("Iter %ld ch3-SyncTime %.3lf\n", (long) iter, syn_time / iter);
+    if(MPIR_Process.comm_world->rank == 0){
+      long long values[2];
+      MPI_Recv(values, 2, MPI_LONG_LONG, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+      printf("%lld %.3lf\n", (gvalues[0] + values[0]) / (long long) iter, syn_time / iter);
+      // printf("Iter %ld ch3-SyncTime %.3lf\n", (long) iter, syn_time / iter);
+    }else{
+      MPI_Send(gvalues, 2, MPI_LONG_LONG, 0, 0, MPI_COMM_WORLD);
+    }
 #endif
     fflush(stdout);
     int mpi_errno = MPI_SUCCESS;
