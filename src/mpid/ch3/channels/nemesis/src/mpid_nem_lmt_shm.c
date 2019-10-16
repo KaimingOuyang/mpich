@@ -417,6 +417,7 @@ static int get_next_req(MPIDI_VC_t *vc)
    buffer each time. */
 extern long long gvalues[2];
 extern int eventset;
+extern double ch3_sender_time;
 static int lmt_shm_send_progress(MPIDI_VC_t *vc, MPIR_Request *req, int *done)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -473,18 +474,37 @@ static int lmt_shm_send_progress(MPIDI_VC_t *vc, MPIR_Request *req, int *done)
         max_pack_bytes = (data_sz - first <= copy_limit) ? data_sz - first : copy_limit;
 
         MPI_Aint actual_pack_bytes;
+
+        
 #ifdef PAPI_TEST
-        const int lmt_thsd = 32768;
-        if (data_sz > lmt_thsd) {
+        const int papi_lmt_thsd = 32768;
+        if (data_sz > papi_lmt_thsd) {
             int retval;
             if ((retval = PAPI_start(eventset)) != PAPI_OK)
                 papi_print_error(retval);
         }
 #endif
+
+#ifdef CH3_SENDER_COPY_TIME
+        const int ch3_copy_lmt_thsd = 32768;
+        struct timespec start, end;
+        if(data_sz > ch3_copy_lmt_thsd){
+            clock_gettime(CLOCK_MONOTONIC, &start);
+        }
+
+#endif
         MPIR_Typerep_pack(req->dev.user_buf, req->dev.user_count, req->dev.datatype, first,
                        (void *)copy_buf->buf[buf_num], max_pack_bytes, &actual_pack_bytes);
+
+#ifdef CH3_SENDER_COPY_TIME
+        if(data_sz > ch3_copy_lmt_thsd){
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            ch3_sender_time += (double) (end.tv_sec - start.tv_sec) * 1e6 + (double) (end.tv_nsec - start.tv_nsec) / 1e3;
+        }
+#endif
+
 #ifdef PAPI_TEST
-        if(data_sz > lmt_thsd){
+        if(data_sz > papi_lmt_thsd){
             int retval;
             long long values[NUM_EVENTS];
             if ((retval = PAPI_stop(eventset, values)) != PAPI_OK)

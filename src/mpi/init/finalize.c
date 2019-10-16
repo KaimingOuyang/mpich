@@ -147,6 +147,7 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 @*/
 double syn_time = 0.0, iter = 0.0;
 long long gvalues[2] = {0,0};
+double ch3_sender_time = 0.0;
 int MPI_Finalize(void)
 {
     // iter -= 100.0;
@@ -160,7 +161,7 @@ int MPI_Finalize(void)
       long long values[2];
       MPI_Recv(values, 2, MPI_LONG_LONG, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-      printf("%lld %.3lf\n", (gvalues[0] + values[0]) / (long long) iter, syn_time / iter);
+      printf("Total_L2_miss: %lld Sender_L2_miss: %lld Receiver_L2_miss: %lld syntime: %.3lf sender_copy_time: %.3lf\n", (gvalues[0] + values[0]) / (long long) iter, gvalues[0] / (long long) iter, values[0] / (long long) iter, syn_time / iter, ch3_sender_time / iter);
       // printf("Iter %ld ch3-SyncTime %.3lf\n", (long) iter, syn_time / iter);
     }else{
       MPI_Send(gvalues, 2, MPI_LONG_LONG, 0, 0, MPI_COMM_WORLD);
