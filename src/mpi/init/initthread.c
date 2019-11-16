@@ -91,7 +91,8 @@ int MPIR_Init_thread(int *argc, char ***argv, int required, int *provided)
     mpi_errno = MPII_init_global(&required);
     MPIR_ERR_CHECK(mpi_errno);  /* out-of-mem */
 
-    MPII_init_topo();
+    MPII_hw_topo_init();        /* to be eventually replaced by MPII_hwtopo_init() */
+    MPII_hwtopo_init();
     MPII_init_windows();
     MPII_init_binding_fortran();
     MPII_init_binding_cxx();
@@ -260,6 +261,7 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided)
     MPIR_FUNC_TERSE_INIT_EXIT(MPID_STATE_MPI_INIT_THREAD);
 
     MPID_THREAD_CS_EXIT(GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
+    MPID_THREAD_CS_EXIT(VCI, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
 
     return mpi_errno;
     /* --END ERROR HANDLING-- */

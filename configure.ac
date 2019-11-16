@@ -613,6 +613,7 @@ AC_CANONICAL_TARGET
 # We also need to do this before the F77 and FC test to ensure that we
 # find the C preprocessor reliably.
 AC_PROG_CC
+AC_PROG_CC_C99
 AM_PROG_CC_C_O dnl needed for automake "silent-rules"
 PAC_PUSH_FLAG([CFLAGS])
 AC_PROG_CPP
@@ -1456,6 +1457,9 @@ fi
 # Check for value thread_cs choice; set the refcount default if necessary
 thread_granularity=MPICH_THREAD_GRANULARITY__SINGLE
 thread_refcount=MPICH_REFCOUNT__NONE
+if test "$device_name" = "ch4" ; then
+    enable_thread_cs="per-vci"
+fi
 if test "$enable_threads" = "multiple" ; then
     case $enable_thread_cs in
     global)
@@ -4515,7 +4519,7 @@ AC_SUBST([MPI_F77_CXX_LONG_DOUBLE_COMPLEX])
 # does not help, since only the latest type_tag definition is used. Type tags are defined in mpi.h,
 # therefore, they must be also be activated/deavtivated there
 PAC_PUSH_FLAG([CFLAGS])
-PAC_APPEND_FLAG([-Werror],[CFLAGS])
+PAC_C_CHECK_COMPILER_OPTION([-Werror],[CFLAGS="$CFLAGS -Werror"])
 AC_TRY_COMPILE([
 typedef int TEST_Datatype;
 #define TEST_INT ((TEST_Datatype)0x44)

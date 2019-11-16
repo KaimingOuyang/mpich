@@ -49,8 +49,6 @@ void MPII_init_thread_failed_exit_cs(void);
 void MPII_finalize_thread_and_enter_cs(void);
 void MPII_finalize_thread_and_exit_cs(void);
 void MPII_finalize_thread_failed_exit_cs(void);
-void MPIR_Thread_CS_Init(void);
-void MPIR_Thread_CS_Finalize(void);
 
 int MPII_init_global(int *p_thread_required);
 int MPII_post_init_global(int thread_provided);
@@ -62,8 +60,6 @@ void MPII_init_binding_cxx(void);
 void MPII_init_binding_f08(void);
 void MPII_pre_init_dbg_logging(int *argc, char ***argv);
 void MPII_init_dbg_logging(void);
-void MPII_init_topo(void);
-void MPII_finalize_topo(void);
 
 int MPII_init_async(int thread_provided);
 int MPII_finalize_async(void);

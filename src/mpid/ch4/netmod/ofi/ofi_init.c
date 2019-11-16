@@ -425,7 +425,7 @@ static int dynproc_send_disconnect(int conn_id)
     MPIR_Context_id_t context_id = 0xF000;
     MPIDI_OFI_dynamic_process_request_t req;
     uint64_t match_bits = 0;
-    int close_msg = 0xcccccccc;
+    unsigned int close_msg = 0xcccccccc;
     struct fi_msg_tagged msg;
     struct iovec msg_iov;
 
@@ -486,7 +486,6 @@ int MPIDI_OFI_mpi_init_hook(int rank, int size, int appnum, int *tag_bits, MPIR_
                             int *n_vcis_provided)
 {
     int mpi_errno = MPI_SUCCESS, i, ofi_version;
-    int thr_err = 0;
     void *table = NULL;
     const char *provname = NULL;
     struct fi_info *hints, *prov = NULL, *prov_use;
@@ -528,10 +527,10 @@ int MPIDI_OFI_mpi_init_hook(int rank, int size, int appnum, int *tag_bits, MPIR_
     MPL_COMPILE_TIME_ASSERT(sizeof(MPIR_Request) >= sizeof(MPIDI_OFI_win_request_t));
     MPL_COMPILE_TIME_ASSERT(sizeof(MPIR_Context_id_t) * 8 >= MPIDI_OFI_AM_CONTEXT_ID_BITS);
 
-    MPID_Thread_mutex_create(&MPIDI_OFI_THREAD_UTIL_MUTEX, &thr_err);
-    MPID_Thread_mutex_create(&MPIDI_OFI_THREAD_PROGRESS_MUTEX, &thr_err);
-    MPID_Thread_mutex_create(&MPIDI_OFI_THREAD_FI_MUTEX, &thr_err);
-    MPID_Thread_mutex_create(&MPIDI_OFI_THREAD_SPAWN_MUTEX, &thr_err);
+    MPIR_Add_mutex(&MPIDI_OFI_THREAD_UTIL_MUTEX);
+    MPIR_Add_mutex(&MPIDI_OFI_THREAD_PROGRESS_MUTEX);
+    MPIR_Add_mutex(&MPIDI_OFI_THREAD_FI_MUTEX);
+    MPIR_Add_mutex(&MPIDI_OFI_THREAD_SPAWN_MUTEX);
 
     /* ------------------------------------------------------------------------ */
     /* fi_allocinfo: allocate and zero an fi_info structure and all related     */
@@ -1014,7 +1013,7 @@ int MPIDI_OFI_mpi_init_hook(int rank, int size, int appnum, int *tag_bits, MPIR_
 
 int MPIDI_OFI_mpi_finalize_hook(void)
 {
-    int thr_err = 0, mpi_errno = MPI_SUCCESS;
+    int mpi_errno = MPI_SUCCESS;
     int i = 0;
     int barrier[2] = { 0 };
     MPIR_Errflag_t errflag = MPIR_ERR_NONE;
@@ -1090,11 +1089,6 @@ int MPIDI_OFI_mpi_finalize_hook(void)
                     MPIDI_OFI_global.cq_buffered_static_tail);
         MPIR_Assert(NULL == MPIDI_OFI_global.cq_buffered_dynamic_head);
     }
-
-    MPID_Thread_mutex_destroy(&MPIDI_OFI_THREAD_UTIL_MUTEX, &thr_err);
-    MPID_Thread_mutex_destroy(&MPIDI_OFI_THREAD_PROGRESS_MUTEX, &thr_err);
-    MPID_Thread_mutex_destroy(&MPIDI_OFI_THREAD_FI_MUTEX, &thr_err);
-    MPID_Thread_mutex_destroy(&MPIDI_OFI_THREAD_SPAWN_MUTEX, &thr_err);
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_OFI_FINALIZE);
@@ -1173,8 +1167,14 @@ int MPIDI_OFI_upids_to_lupids(int size, size_t * remote_upid_size, char *remote_
     int n_new_procs = 0;
     int max_n_avts;
     char *curr_upid;
-    new_avt_procs = (int *) MPL_malloc(size * sizeof(int), MPL_MEM_ADDRESS);
-    new_upids = (char **) MPL_malloc(size * sizeof(char *), MPL_MEM_ADDRESS);
+
+    MPIR_CHKLMEM_DECL(2);
+
+    MPIR_CHKLMEM_MALLOC(new_avt_procs, int *, sizeof(int) * size, mpi_errno, "new_avt_procs",
+                        MPL_MEM_ADDRESS);
+    MPIR_CHKLMEM_MALLOC(new_upids, char **, sizeof(char *) * size, mpi_errno, "new_upids",
+                        MPL_MEM_ADDRESS);
+
     max_n_avts = MPIDIU_get_max_n_avts();
 
     curr_upid = remote_upids;
@@ -1238,8 +1238,7 @@ int MPIDI_OFI_upids_to_lupids(int size, size_t * remote_upid_size, char *remote_
     }
 
   fn_exit:
-    MPL_free(new_avt_procs);
-    MPL_free(new_upids);
+    MPIR_CHKLMEM_FREEALL();
     return mpi_errno;
   fn_fail:
     goto fn_exit;

@@ -6,9 +6,6 @@
 
 #include "mpiimpl.h"
 #include "mpicomm.h"
-#include "mpir_info.h"  /* MPIR_Info_free */
-
-#include "utlist.h"
 
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
@@ -316,9 +313,8 @@ struct gcn_state *next_gcn = NULL;
  * according to the context_id of of parrent communicator and the tag, wherby blocking context_id
  * allocations  can have the same tag, while nonblocking operations cannot. In the non-blocking
  * case, the user is reponsible for the right tags if "comm_create_group" is used */
-static int add_gcn_to_list(struct gcn_state *new_state)
+static void add_gcn_to_list(struct gcn_state *new_state)
 {
-    int mpi_errno = 0;
     struct gcn_state *tmp = NULL;
     if (next_gcn == NULL) {
         next_gcn = new_state;
@@ -339,7 +335,6 @@ static int add_gcn_to_list(struct gcn_state *new_state)
         tmp->next = new_state;
 
     }
-    return mpi_errno;
 }
 
 /* Allocates a new context ID collectively over the given communicator.  This
@@ -507,6 +502,7 @@ int MPIR_Get_contextid_sparse_group(MPIR_Comm * comm_ptr, MPIR_Group * group_ptr
                  * When we do a collective operation, we anyway yield
                  * for other others */
                 MPID_THREAD_CS_YIELD(GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
+                MPID_THREAD_CS_YIELD(VCI, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
                 MPID_THREAD_CS_YIELD(POBJ, MPIR_THREAD_POBJ_CTX_MUTEX);
             }
         } else if (st.own_mask) {
@@ -535,6 +531,7 @@ int MPIR_Get_contextid_sparse_group(MPIR_Comm * comm_ptr, MPIR_Group * group_ptr
                  * When we do a collective operation, we anyway yield
                  * for other others */
                 MPID_THREAD_CS_YIELD(GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
+                MPID_THREAD_CS_YIELD(VCI, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
                 MPID_THREAD_CS_YIELD(POBJ, MPIR_THREAD_POBJ_CTX_MUTEX);
             }
         } else {
@@ -543,6 +540,7 @@ int MPIR_Get_contextid_sparse_group(MPIR_Comm * comm_ptr, MPIR_Group * group_ptr
              * do a collective operation, we anyway yield for other
              * others */
             MPID_THREAD_CS_YIELD(GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
+            MPID_THREAD_CS_YIELD(VCI, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
             MPID_THREAD_CS_YIELD(POBJ, MPIR_THREAD_POBJ_CTX_MUTEX);
         }
         MPID_THREAD_CS_EXIT(POBJ, MPIR_THREAD_POBJ_CTX_MUTEX);
