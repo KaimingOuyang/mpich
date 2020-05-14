@@ -102,7 +102,7 @@ int MPIDIG_init(void)
                                  &MPIDIG_get_acc_origin_cb, &MPIDIG_get_acc_target_msg_cb);
     MPIR_ERR_CHECK(mpi_errno);
 
-    mpi_errno = MPIDIG_am_reg_cb(MPIDIG_ACC_ACK, NULL, &MPIDIG_acc_ack_target_msg_cb);
+    mpi_errno = MPIDIG_am_reg_cb(MPIDIG_ACC_ACK, &MPIDIG_acc_ack_origin_cb, &MPIDIG_acc_ack_target_msg_cb);
     MPIR_ERR_CHECK(mpi_errno);
 
     mpi_errno = MPIDIG_am_reg_cb(MPIDIG_GET_ACC_ACK,

@@ -314,20 +314,23 @@ static int ack_acc(MPIR_Request * rreq)
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDI_REQUEST(rreq, is_local))
         mpi_errno =
-            MPIDI_SHM_am_send_hdr_reply(MPIDIG_win_to_context
-                                        (MPIDIG_REQUEST(rreq, req->areq.win_ptr)),
-                                        MPIDIG_REQUEST(rreq, rank), MPIDIG_ACC_ACK,
-                                        &ack_msg, sizeof(ack_msg));
+            MPIDI_SHM_am_isend_reply(MPIDIG_win_to_context
+                                     (MPIDIG_REQUEST(rreq, req->areq.win_ptr)),
+                                     MPIDIG_REQUEST(rreq, rank), MPIDIG_ACC_ACK,
+                                     &ack_msg, sizeof(ack_msg),
+                                     &ack_msg,
+                                     0, MPI_BYTE, rreq);
     else
 #endif
     {
         mpi_errno =
-            MPIDI_NM_am_send_hdr_reply(MPIDIG_win_to_context
-                                       (MPIDIG_REQUEST(rreq, req->areq.win_ptr)),
-                                       MPIDIG_REQUEST(rreq, rank), MPIDIG_ACC_ACK,
-                                       &ack_msg, sizeof(ack_msg));
+            MPIDI_NM_am_isend_reply(MPIDIG_win_to_context
+                                    (MPIDIG_REQUEST(rreq, req->areq.win_ptr)),
+                                    MPIDIG_REQUEST(rreq, rank), MPIDIG_ACC_ACK,
+                                    &ack_msg, sizeof(ack_msg),
+                                    &ack_msg,
+                                    0, MPI_BYTE, rreq);
     }
-
     MPIR_ERR_CHECK(mpi_errno);
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDIG_ACK_ACC);
@@ -637,7 +640,7 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     mpi_errno = ack_acc(rreq);
     MPIR_ERR_CHECK(mpi_errno);
 
-    MPID_Request_complete(rreq);
+    // MPID_Request_complete(rreq);
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDIG_HANDLE_ACC_CMPL);
     return mpi_errno;
