@@ -153,6 +153,24 @@ fi
 
 AC_SUBST(DTP_SWITCH)
 
+# GPU support
+PAC_SET_HEADER_LIB_PATH([cuda])
+PAC_CHECK_HEADER_LIB([cuda_runtime_api.h],[cudart],[cudaStreamSynchronize],[have_cuda=yes],[have_cuda=no])
+cudainc=""
+cudalib=""
+cudart=""
+if test "X${have_cuda}" = "Xyes" ; then
+    AC_DEFINE([HAVE_CUDA],[1],[Define if CUDA is available])
+    # FIXME
+    AS_IF([test -n "${with_cuda}"],
+          [cudainc="-I${with_cuda}/include"
+	   cudalib="-L${with_cuda}/lib64"
+	   cudart="-lcudart"])
+fi
+AC_SUBST([cudainc])
+AC_SUBST([cudalib])
+AC_SUBST([cudart])
+
 AC_ARG_ENABLE(cxx,
 	[AC_HELP_STRING([--enable-cxx],[Turn on C++ tests (default)])],,[enable_cxx=yes])
 
