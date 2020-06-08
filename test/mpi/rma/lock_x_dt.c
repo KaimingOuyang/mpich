@@ -19,6 +19,11 @@ enum acc_type {
     ACC_TYPE__GACC,
 };
 
+static mtest_mem_type_e origmem;
+static mtest_mem_type_e targetmem;
+static void *origbuf_h;
+static void *targetbuf_h;
+
 static int run_test(MPI_Comm comm, MPI_Win win, DTP_obj_s orig_obj, void *origbuf,
                     DTP_pool_s dtp, DTP_obj_s target_obj, void *targetbuf,
                     DTP_obj_s result_obj, void *resultbuf, int count, enum acc_type acc)
@@ -100,12 +105,13 @@ static int run_test(MPI_Comm comm, MPI_Win win, DTP_obj_s orig_obj, void *origbu
      * second one informs the origin that the target is done
      * checking. */
     if (rank == orig) {
-        origbuf = malloc(orig_obj.DTP_bufsize);
-        assert(origbuf);
+        MTestAlloc(orig_obj.DTP_bufsize, origmem, &origbuf_h, &origbuf);
+        assert(origbuf && origbuf_h);
 
-        err = DTP_obj_buf_init(orig_obj, origbuf, 0, 1, count);
+        err = DTP_obj_buf_init(orig_obj, origbuf_h, 0, 1, count);
         if (err != DTP_SUCCESS)
             errs++;
+        MTestCopyContent(origbuf_h, origbuf, orig_obj.DTP_bufsize, origmem);
 
         if (lock_type == LOCK_TYPE__LOCK) {
             MPI_Win_lock(MPI_LOCK_SHARED, target, 0, win);
@@ -152,11 +158,13 @@ static int run_test(MPI_Comm comm, MPI_Win win, DTP_obj_s orig_obj, void *origbu
             for (t = target_start_idx; t <= target_end_idx; t++)
                 MPI_Win_flush_local(t, win);
             /* reset the send buffer to test local completion */
-            DTP_obj_buf_init(orig_obj, origbuf, 0, 0, count);
+            DTP_obj_buf_init(orig_obj, origbuf_h, 0, 0, count);
+            MTestCopyContent(origbuf_h, origbuf, orig_obj.DTP_bufsize, origmem);
         } else if (flush_local_type == FLUSH_LOCAL_TYPE__FLUSH_LOCAL_ALL) {
             MPI_Win_flush_local_all(win);
             /* reset the send buffer to test local completion */
-            DTP_obj_buf_init(orig_obj, origbuf, 0, 0, count);
+            DTP_obj_buf_init(orig_obj, origbuf_h, 0, 0, count);
+            MTestCopyContent(origbuf_h, origbuf, orig_obj.DTP_bufsize, origmem);
         }
 
         if (flush_type == FLUSH_TYPE__FLUSH_ALL) {
@@ -195,12 +203,13 @@ static int run_test(MPI_Comm comm, MPI_Win win, DTP_obj_s orig_obj, void *origbu
             free(resultbuf);
         }
 
-        free(origbuf);
+        MTestFree(origmem, origbuf_h, origbuf);
     } else if (rank == target) {
         MPI_Barrier(comm);
         MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
 
-        err = DTP_obj_buf_check(target_obj, targetbuf, 0, 1, count);
+        MTestCopyContent(targetbuf, targetbuf_h, target_obj.DTP_bufsize, targetmem);
+        err = DTP_obj_buf_check(target_obj, targetbuf_h, 0, 1, count);
         if (err != DTP_SUCCESS)
             errs++;
 
@@ -239,6 +248,8 @@ int main(int argc, char *argv[])
     testsize = MTestArgListGetInt(head, "testsize");
     count = MTestArgListGetLong(head, "count");
     basic_type = MTestArgListGetString(head, "type");
+    origmem = MTestArgListGetMemType(head, "origmem");
+    targetmem = MTestArgListGetMemType(head, "targetmem");
 
     maxbufsize = MTestDefaultMaxBufferSize();
 
@@ -257,8 +268,8 @@ int main(int argc, char *argv[])
         goto fn_exit;
     }
 
-    targetbuf = malloc(maxbufsize);
-    assert(targetbuf);
+    MTestAlloc(target_obj.DTP_bufsize, targetmem, &targetbuf_h, &targetbuf);
+    assert(targetbuf && targetbuf_h);
 
     while (MTestGetIntracommGeneral(&comm, minsize, 1)) {
         if (comm == MPI_COMM_NULL) {
@@ -295,11 +306,12 @@ int main(int argc, char *argv[])
                 break;
             }
 
-            err = DTP_obj_buf_init(target_obj, targetbuf, 1, 2, count);
+            err = DTP_obj_buf_init(target_obj, targetbuf_h, 1, 2, count);
             if (err != DTP_SUCCESS) {
                 errs++;
                 break;
             }
+            MTestCopyContent(targetbuf_h, targetbuf, target_obj.DTP_bufsize, targetmem);
 
             /* do a barrier to ensure that the target buffer is
              * initialized before we start writing data to it */
@@ -318,7 +330,7 @@ int main(int argc, char *argv[])
         MTestFreeComm(&comm);
     }
 
-    free(targetbuf);
+    MTestFree(targetmem, targetbuf_h, targetbuf);
 
   fn_exit:
     DTP_pool_free(dtp);

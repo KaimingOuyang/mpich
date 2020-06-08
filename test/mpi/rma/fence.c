@@ -15,6 +15,8 @@
 static char MTEST_Descrip[] = "Get with Fence";
 */
 
+static mtest_mem_type_e origmem;
+
 static inline int test(MPI_Comm comm, int rank, int orig, int target,
                        MPI_Aint count, MPI_Aint maxbufsize,
                        DTP_obj_s orig_obj, DTP_pool_s dtp, DTP_obj_s target_obj, void *targetbuf,
@@ -25,6 +27,7 @@ static inline int test(MPI_Comm comm, int rank, int orig, int target,
     MPI_Aint extent, lb;
     MPI_Datatype origtype, targettype;
     void *origbuf;
+    void *origbuf_h;
 
     origtype = orig_obj.DTP_datatype;
     origcount = orig_obj.DTP_type_count;
@@ -44,11 +47,13 @@ static inline int test(MPI_Comm comm, int rank, int orig, int target,
         if (err != DTP_SUCCESS) {
             return ++errs;
         }
+        MTestCopyContent(targetbuf_h, targetbuf, target_obj.DTP_bufsize, targetmem);
 #elif defined(USE_PUT)
         err = DTP_obj_buf_init(target_obj, targetbuf, -1, -1, count);
         if (err != DTP_SUCCESS) {
             return ++errs;
         }
+        MTestCopyContent(targetbuf_h, targetbuf, target_obj.DTP_bufsize, targetmem);
 #endif
 
         /* The target does not need to do anything besides the
@@ -57,7 +62,8 @@ static inline int test(MPI_Comm comm, int rank, int orig, int target,
         MPI_Win_fence(0, win);
 
 #if defined(USE_PUT)
-        err = DTP_obj_buf_check(target_obj, targetbuf, 0, 1, count);
+        MTestCopyContent(targetbuf, targetbuf_h, target_obj.DTP_bufsize, targetmem);
+        err = DTP_obj_buf_check(target_obj, targetbuf_h, 0, 1, count);
         if (err != DTP_SUCCESS) {
             errs++;
             if (errs < 10) {
@@ -68,20 +74,22 @@ static inline int test(MPI_Comm comm, int rank, int orig, int target,
         }
 #endif
     } else if (rank == orig) {
-        origbuf = malloc(orig_obj.DTP_bufsize);
-        if (origbuf == NULL)
+        MTestAlloc(orig_obj.DTP_bufsize, origmem, &origbuf_h, &origbuf);
+        if (origbuf == NULL || origbuf_h == NULL) {
             return ++errs;
-
+        }
 #if defined(USE_GET)
-        err = DTP_obj_buf_init(orig_obj, origbuf, -1, -1, count);
+        err = DTP_obj_buf_init(orig_obj, origbuf_h, -1, -1, count);
         if (err != DTP_SUCCESS) {
             return ++errs;
         }
+        MTestCopyContent(origbuf_h, origbuf, orig_obj.DTP_bufsize, origmem);
 #elif defined(USE_PUT)
-        err = DTP_obj_buf_init(orig_obj, origbuf, 0, 1, count);
+        err = DTP_obj_buf_init(orig_obj, origbuf_h, 0, 1, count);
         if (err != DTP_SUCCESS) {
             return ++errs;
         }
+        MTestCopyContent(origbuf_h, origbuf, orig_obj.DTP_bufsize, origmem);
 #endif
 
         /* To improve reporting of problems about operations, we
@@ -123,7 +131,8 @@ static inline int test(MPI_Comm comm, int rank, int orig, int target,
             }
         }
 #if defined(USE_GET)
-        err = DTP_obj_buf_check(orig_obj, origbuf, 0, 1, count);
+        MTestCopyContent(origbuf, origbuf_h, orig_obj.DTP_bufsize, origmem);
+        err = DTP_obj_buf_check(orig_obj, origbuf_h, 0, 1, count);
         if (err != DTP_SUCCESS) {
             errs++;
             if (errs < 10) {
@@ -134,7 +143,7 @@ static inline int test(MPI_Comm comm, int rank, int orig, int target,
         }
 #endif
 
-        free(origbuf);
+        MTestFree(origmem, origbuf_h, origbuf);
     } else {
         MPI_Win_fence(0, win);
         MPI_Win_fence(0, win);
@@ -160,8 +169,10 @@ int main(int argc, char *argv[])
     DTP_obj_s orig_obj, target_obj;
     char *basic_type;
     void *targetbuf;
+    void *targetbuf_h;
     MPI_Aint extent, lb;
     MPI_Win win;
+    mtest_mem_type_e targetmem;
 
     MTest_Init(&argc, &argv);
 
@@ -170,6 +181,8 @@ int main(int argc, char *argv[])
     testsize = MTestArgListGetInt(head, "testsize");
     count = MTestArgListGetLong(head, "count");
     basic_type = MTestArgListGetString(head, "type");
+    origmem = MTestArgListGetMemType(head, "origmem");
+    targetmem = MTestArgListGetMemType(head, "targetmem");
 
     maxbufsize = MTestDefaultMaxBufferSize();
 
@@ -198,8 +211,8 @@ int main(int argc, char *argv[])
         goto fn_exit;
     }
 
-    targetbuf = malloc(maxbufsize);
-    if (targetbuf == NULL) {
+    MTestAlloc(target_obj.DTP_bufsize, targetmem, &targetbuf_h, &targetbuf);
+    if (targetbuf == NULL || targetbuf_h == NULL) {
         return ++errs;
     }
 
@@ -249,7 +262,7 @@ int main(int argc, char *argv[])
         MTestFreeComm(&comm);
     }
 
-    free(targetbuf);
+    MTestFree(targetmem, targetbuf_h, targetbuf);
 
   fn_exit:
     DTP_pool_free(dtp);
