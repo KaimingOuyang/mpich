@@ -65,12 +65,17 @@ int main(int argc, char **argv)
     int i, rank, nproc;
     int j, count, errors = 0;
     TYPE_C *win_ptr, *res_ptr, *val_ptr;
+    TYPE_C *res_ptr_h;
     MPI_Win win;
 #if defined (GACC_TYPE_DERIVED)
     MPI_Datatype derived_type;
 #endif
+    mtest_mem_type_e resmem;
 
     MTest_Init(&argc, &argv);
+
+    MTestArgList *head = MTestArgListCreate(argc, argv);
+    resmem = MTestArgListGetMemType(head, "resmem");
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
@@ -78,7 +83,8 @@ int main(int argc, char **argv)
     for (j = 0; j < NUM_COUNT; j++) {
         count = test_counts[j];
         win_ptr = malloc(sizeof(TYPE_C) * nproc * count);
-        res_ptr = malloc(sizeof(TYPE_C) * nproc * count);
+        MTestAlloc(sizeof(TYPE_C) * nproc * count, resmem, (void **) &res_ptr_h,
+                   (void **) &res_ptr);
         val_ptr = malloc(sizeof(TYPE_C) * count);
 
 #if defined (GACC_TYPE_DERIVED)
@@ -91,7 +97,8 @@ int main(int argc, char **argv)
 
         /* Test self communication */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, 1, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, 1, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         for (i = 0; i < ITER; i++) {
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, rank, 0, win);
@@ -112,7 +119,8 @@ int main(int argc, char **argv)
 
         /* Test neighbor communication */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, 1, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, 1, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         for (i = 0; i < ITER; i++) {
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, (rank + 1) % nproc, 0, win);
@@ -135,7 +143,8 @@ int main(int argc, char **argv)
 
         /* Test contention */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, 1, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, 1, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         if (rank != 0) {
             for (i = 0; i < ITER; i++) {
@@ -163,7 +172,8 @@ int main(int argc, char **argv)
 
         /* Test all-to-all communication (fence) */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, rank, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, rank, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         for (i = 0; i < ITER; i++) {
             int j;
@@ -176,14 +186,15 @@ int main(int argc, char **argv)
             MPI_Win_fence(MPI_MODE_NOSUCCEED, win);
             MPI_Barrier(MPI_COMM_WORLD);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < nproc; j++) {
                 int c;
                 for (c = 0; c < count; c++) {
-                    if (res_ptr[j * count + c] != i * rank) {
+                    if (res_ptr_h[j * count + c] != i * rank) {
                         SQUELCH(printf
                                 ("%d->%d -- ALL-TO-ALL (FENCE) [%d]: iter %d, expected result "
                                  TYPE_FMT ", got " TYPE_FMT "\n", rank, j, c, i, (TYPE_C) i * rank,
-                                 res_ptr[j * count + c]););
+                                 res_ptr_h[j * count + c]););
                         errors++;
                     }
                 }
@@ -207,7 +218,8 @@ int main(int argc, char **argv)
 
         /* Test all-to-all communication (lock-all) */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, rank, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, rank, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         for (i = 0; i < ITER; i++) {
             int j;
@@ -220,14 +232,15 @@ int main(int argc, char **argv)
             MPI_Win_unlock_all(win);
             MPI_Barrier(MPI_COMM_WORLD);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < nproc; j++) {
                 int c;
                 for (c = 0; c < count; c++) {
-                    if (res_ptr[j * count + c] != i * rank) {
+                    if (res_ptr_h[j * count + c] != i * rank) {
                         SQUELCH(printf
                                 ("%d->%d -- ALL-TO-ALL (LOCK-ALL) [%d]: iter %d, expected result "
                                  TYPE_FMT ", got " TYPE_FMT "\n", rank, j, c, i, (TYPE_C) i * rank,
-                                 res_ptr[j * count + c]););
+                                 res_ptr_h[j * count + c]););
                         errors++;
                     }
                 }
@@ -251,7 +264,8 @@ int main(int argc, char **argv)
 
         /* Test all-to-all communication (lock-all+flush) */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, rank, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, rank, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         for (i = 0; i < ITER; i++) {
             int j;
@@ -265,14 +279,15 @@ int main(int argc, char **argv)
             MPI_Win_unlock_all(win);
             MPI_Barrier(MPI_COMM_WORLD);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < nproc; j++) {
                 int c;
                 for (c = 0; c < count; c++) {
-                    if (res_ptr[j * count + c] != i * rank) {
+                    if (res_ptr_h[j * count + c] != i * rank) {
                         SQUELCH(printf
                                 ("%d->%d -- ALL-TO-ALL (LOCK-ALL+FLUSH) [%d]: iter %d, expected result "
                                  TYPE_FMT ", got " TYPE_FMT "\n", rank, j, c, i, (TYPE_C) i * rank,
-                                 res_ptr[j * count + c]););
+                                 res_ptr_h[j * count + c]););
                         errors++;
                     }
                 }
@@ -296,7 +311,8 @@ int main(int argc, char **argv)
 
         /* Test NO_OP (neighbor communication) */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, 1, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, 1, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         MPI_Win_lock(MPI_LOCK_EXCLUSIVE, rank, 0, win);
         for (i = 0; i < count * nproc; i++)
@@ -308,52 +324,58 @@ int main(int argc, char **argv)
             int j, target = (rank + 1) % nproc;
 
             /* Test: origin_buf = NULL */
-            memset(res_ptr, -1, sizeof(TYPE_C) * nproc * count);        /* reset result buffer. */
+            memset(res_ptr_h, -1, sizeof(TYPE_C) * nproc * count);      /* reset result buffer. */
+            MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, target, 0, win);
             MPI_Get_accumulate(NULL, count, TYPE_MPI, res_ptr, count, TYPE_MPI,
                                target, 0, count, TYPE_MPI, MPI_NO_OP, win);
             MPI_Win_unlock(target, win);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < count; j++) {
-                if (res_ptr[j] != (TYPE_C) target) {
+                if (res_ptr_h[j] != (TYPE_C) target) {
                     SQUELCH(printf
                             ("%d->%d -- NOP(1)[%d]: expected " TYPE_FMT ", got " TYPE_FMT "\n",
-                             target, rank, i, (TYPE_C) target, res_ptr[i]););
+                             target, rank, i, (TYPE_C) target, res_ptr_h[i]););
                     errors++;
                 }
             }
 
             /* Test: origin_buf = NULL, origin_count = 0 */
-            memset(res_ptr, -1, sizeof(TYPE_C) * nproc * count);
+            memset(res_ptr_h, -1, sizeof(TYPE_C) * nproc * count);
+            MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, target, 0, win);
             MPI_Get_accumulate(NULL, 0, TYPE_MPI, res_ptr, count, TYPE_MPI,
                                target, 0, count, TYPE_MPI, MPI_NO_OP, win);
             MPI_Win_unlock(target, win);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < count; j++) {
-                if (res_ptr[j] != (TYPE_C) target) {
+                if (res_ptr_h[j] != (TYPE_C) target) {
                     SQUELCH(printf
                             ("%d->%d -- NOP(2)[%d]: expected " TYPE_FMT ", got " TYPE_FMT "\n",
-                             target, rank, i, (TYPE_C) target, res_ptr[i]););
+                             target, rank, i, (TYPE_C) target, res_ptr_h[i]););
                     errors++;
                 }
             }
 
             /* Test: origin_buf = NULL, origin_count = 0, origin_dtype = NULL */
-            memset(res_ptr, -1, sizeof(TYPE_C) * nproc * count);
+            memset(res_ptr_h, -1, sizeof(TYPE_C) * nproc * count);
+            MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, target, 0, win);
             MPI_Get_accumulate(NULL, 0, MPI_DATATYPE_NULL, res_ptr, count, TYPE_MPI,
                                target, 0, count, TYPE_MPI, MPI_NO_OP, win);
             MPI_Win_unlock(target, win);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < count; j++) {
-                if (res_ptr[j] != (TYPE_C) target) {
+                if (res_ptr_h[j] != (TYPE_C) target) {
                     SQUELCH(printf
                             ("%d->%d -- NOP(2)[%d]: expected " TYPE_FMT ", got " TYPE_FMT "\n",
-                             target, rank, i, (TYPE_C) target, res_ptr[i]););
+                             target, rank, i, (TYPE_C) target, res_ptr_h[i]););
                     errors++;
                 }
             }
@@ -361,7 +383,8 @@ int main(int argc, char **argv)
 
         /* Test NO_OP (self communication) */
 
-        reset_bufs(win_ptr, res_ptr, val_ptr, 1, count, win);
+        reset_bufs(win_ptr, res_ptr_h, val_ptr, 1, count, win);
+        MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
         MPI_Win_lock(MPI_LOCK_EXCLUSIVE, rank, 0, win);
         for (i = 0; i < count * nproc; i++)
@@ -373,52 +396,58 @@ int main(int argc, char **argv)
             int j, target = rank;
 
             /* Test: origin_buf = NULL */
-            memset(res_ptr, -1, sizeof(TYPE_C) * nproc * count);
+            memset(res_ptr_h, -1, sizeof(TYPE_C) * nproc * count);
+            MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, target, 0, win);
             MPI_Get_accumulate(NULL, count, TYPE_MPI, res_ptr, count, TYPE_MPI,
                                target, 0, count, TYPE_MPI, MPI_NO_OP, win);
             MPI_Win_unlock(target, win);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < count; j++) {
-                if (res_ptr[j] != (TYPE_C) target) {
+                if (res_ptr_h[j] != (TYPE_C) target) {
                     SQUELCH(printf
                             ("%d->%d -- NOP_SELF(1)[%d]: expected " TYPE_FMT ", got " TYPE_FMT "\n",
-                             target, rank, i, (TYPE_C) target, res_ptr[i]););
+                             target, rank, i, (TYPE_C) target, res_ptr_h[i]););
                     errors++;
                 }
             }
 
             /* Test: origin_buf = NULL, origin_count = 0 */
-            memset(res_ptr, -1, sizeof(TYPE_C) * nproc * count);
+            memset(res_ptr_h, -1, sizeof(TYPE_C) * nproc * count);
+            MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, target, 0, win);
             MPI_Get_accumulate(NULL, 0, TYPE_MPI, res_ptr, count, TYPE_MPI,
                                target, 0, count, TYPE_MPI, MPI_NO_OP, win);
             MPI_Win_unlock(target, win);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < count; j++) {
-                if (res_ptr[j] != (TYPE_C) target) {
+                if (res_ptr_h[j] != (TYPE_C) target) {
                     SQUELCH(printf
                             ("%d->%d -- NOP_SELF(2)[%d]: expected " TYPE_FMT ", got " TYPE_FMT "\n",
-                             target, rank, i, (TYPE_C) target, res_ptr[i]););
+                             target, rank, i, (TYPE_C) target, res_ptr_h[i]););
                     errors++;
                 }
             }
 
             /* Test: origin_buf = NULL, origin_count = 0, origin_dtype = NULL */
-            memset(res_ptr, -1, sizeof(TYPE_C) * nproc * count);
+            memset(res_ptr_h, -1, sizeof(TYPE_C) * nproc * count);
+            MTestCopyContent(res_ptr_h, res_ptr, sizeof(TYPE_C) * nproc * count, resmem);
 
             MPI_Win_lock(MPI_LOCK_EXCLUSIVE, target, 0, win);
             MPI_Get_accumulate(NULL, 0, MPI_DATATYPE_NULL, res_ptr, count, TYPE_MPI,
                                target, 0, count, TYPE_MPI, MPI_NO_OP, win);
             MPI_Win_unlock(target, win);
 
+            MTestCopyContent(res_ptr, res_ptr_h, sizeof(TYPE_C) * nproc * count, resmem);
             for (j = 0; j < count; j++) {
-                if (res_ptr[j] != (TYPE_C) target) {
+                if (res_ptr_h[j] != (TYPE_C) target) {
                     SQUELCH(printf
                             ("%d->%d -- NOP_SELF(2)[%d]: expected " TYPE_FMT ", got " TYPE_FMT "\n",
-                             target, rank, i, (TYPE_C) target, res_ptr[i]););
+                             target, rank, i, (TYPE_C) target, res_ptr_h[i]););
                     errors++;
                 }
             }
@@ -431,7 +460,7 @@ int main(int argc, char **argv)
 #endif
 
         free(win_ptr);
-        free(res_ptr);
+        MTestFree(resmem, res_ptr_h, res_ptr);
         free(val_ptr);
     }
 
