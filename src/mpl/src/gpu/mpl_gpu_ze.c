@@ -105,7 +105,13 @@ int MPL_gpu_finalize()
 int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_handle)
 {
     ze_result_t ret;
+    ze_device_properties_t devproerty;
+    MPL_pointer_attr_t attr;
+
+    MPL_gpu_query_pointer_attr(ptr, &attr);
+    zeDeviceGetProperties(attr.device, &devproerty);
     ipc_handle->offset = 0;
+    ipc_handle->dev_id = devproerty.deviceId;
     ret = zeDriverGetMemIpcHandle(global_ze_driver_handle, ptr, &ipc_handle->handle);
     ZE_ERR_CHECK(ret);
 
@@ -121,7 +127,7 @@ int MPL_gpu_ipc_handle_map(MPL_gpu_ipc_mem_handle_t ipc_handle, MPL_gpu_device_h
     ze_result_t ret;
     /* TODO: retrive dev_id for device handle */
     ret =
-        zeDriverOpenMemIpcHandle(global_ze_driver_handle, dev_handle, ipc_handle.handle,
+        zeDriverOpenMemIpcHandle(global_ze_driver_handle, ipc_handle.dev_id, ipc_handle.handle,
                                  ZE_IPC_MEMORY_FLAG_NONE, ptr);
     ZE_ERR_CHECK(ret);
 

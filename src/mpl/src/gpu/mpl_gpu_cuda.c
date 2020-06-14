@@ -50,6 +50,10 @@ int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_ha
     cudaError_t ret;
     CUresult curet;
     CUdeviceptr pbase;
+    struct cudaPointerAttributes ptr_attr;
+
+    ret = cudaPointerGetAttributes(&ptr_attr, ptr);
+    ipc_handle->dev_id = ptr_attr.device;
 
     curet = cuMemGetAddressRange(&pbase, NULL, (CUdeviceptr) ptr);
     CU_ERR_CHECK(curet);

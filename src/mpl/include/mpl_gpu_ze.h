@@ -9,6 +9,7 @@
 #include "level_zero/ze_api.h"
 
 typedef struct {
+    int dev_id;
     uintptr_t offset;
     ze_ipc_mem_handle_t handle;
 } MPL_gpu_ipc_mem_handle_t;
