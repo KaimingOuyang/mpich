@@ -130,9 +130,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
                                     MPIDIG_REQUEST(rreq, datatype), 0, &actual_unpack_bytes);
     MPIR_ERR_CHECK(mpi_errno);
 
-    mpi_errno = MPIDI_IPCI_handle_unmap(ipc_type, src_buf, ipc_handle);
-    MPIR_ERR_CHECK(mpi_errno);
-
     ack_ctrl_hdr.ipc_contig_slmt_fin.ipc_type = ipc_type;
     ack_ctrl_hdr.ipc_contig_slmt_fin.req_ptr = sreq_ptr;
     mpi_errno = MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),

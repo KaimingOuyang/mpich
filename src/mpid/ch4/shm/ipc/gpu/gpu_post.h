@@ -85,30 +85,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_ipc_handle_map(int node_rank,
             /* TODO: after get remote datatype, we can compare remote and local datatype density
              * to decide which gpu to map buffer onto. For now, we just add dummy mapping. */
             MPIR_Datatype_get_density(recv_type, recv_dt_density);
-            mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, dev_handle, vaddr);
+            mpl_err = MPL_gpu_ipc_handle_map(ipc_handle, dev_handle, vaddr);
         }
     }
     MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, "**gpu_ipc_handle_map");
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_GPU_IPC_HANDLE_MAP);
-    return mpi_errno;
-  fn_fail:
-    goto fn_exit;
-}
-
-MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_ipc_handle_unmap(void *vaddr,
-                                                        MPIDI_GPU_ipc_handle_t ipc_handle)
-{
-    int mpi_errno = MPI_SUCCESS, mpl_err = MPL_SUCCESS;
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_IPC_HANDLE_UNMAP);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_IPC_HANDLE_UNMAP);
-
-    mpl_err = MPL_gpu_ipc_handle_unmap(vaddr, ipc_handle);
-    MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, "**gpu_ipc_handle_unmap");
-
-  fn_exit:
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_GPU_IPC_HANDLE_UNMAP);
     return mpi_errno;
   fn_fail:
     goto fn_exit;

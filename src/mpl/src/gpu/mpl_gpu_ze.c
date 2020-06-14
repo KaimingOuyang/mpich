@@ -4,12 +4,27 @@
  */
 
 #include "mpl.h"
+#include <assert.h>
 
 MPL_SUPPRESS_OSX_HAS_NO_SYMBOLS_WARNING;
 
 #ifdef MPL_HAVE_ZE
 
+/* TODO: implement gval memory handle cache for inte gpu */
+typedef struct {
+    uintptr_t remote_base_addr;
+    uintptr_t mapped_base_addr;
+    uintptr_t offset;
+} gpu_ipc_handle_obj_s;
+
+static MPL_gavl_tree_t **ze_ipc_handle_trees;
+static int node_local_size;
+static int node_gpu_num;
+
+static void gpu_ipc_handle_free(void *ipc_handle);
+
 ze_driver_handle_t global_ze_driver_handle;
+ze_device_handle_t *global_ze_devices_handle;
 int gpu_ze_init_driver();
 
 #define ZE_ERR_CHECK(ret) \
@@ -18,15 +33,41 @@ int gpu_ze_init_driver();
             goto fn_fail; \
     } while (0)
 
-int MPL_gpu_init(int *max_dev_id_ptr)
+int MPL_gpu_init(int local_size, int node_rank, int need_thread_safety, int *max_dev_id_ptr)
 {
-    int ret_error;
+    ze_result_t ret;
+    int ret_error, device_count;
     ret_error = gpu_ze_init_driver();
     if (ret_error != MPL_SUCCESS)
         goto fn_fail;
 
-    zeDeviceGet(global_ze_driver_handle, max_dev_id_ptr, NULL);
+    node_local_size = local_size;
+    node_local_rank = node_rank;
+    zeDriverGet(&node_gpu_num, &global_ze_driver_handle);
+    ret = zeDeviceGet(global_ze_driver_handle, &device_count, NULL);
+    ZE_ERR_CHECK(ret);
 
+    *max_dev_id_ptr = device_count;
+    global_ze_devices_handle =
+        (ze_device_handle_t *) MPL_malloc(sizeof(ze_device_handle_t) * device_count, MPL_MEM_OTHER);
+    ret = zeDeviceGet(global_ze_driver_handle, &device_count, global_ze_devices_handle);
+    ZE_ERR_CHECK(ret);
+
+    ze_ipc_handle_trees =
+        (MPL_gavl_tree_t **) MPL_malloc(sizeof(MPL_gavl_tree_t *) * local_size, MPL_MEM_OTHER);
+    assert(ze_ipc_handle_trees != NULL);
+    for (int i = 0; i < local_size; ++i) {
+        ze_ipc_handle_trees[i] =
+            (MPL_gavl_tree_t *) MPL_malloc(sizeof(MPL_gavl_tree_t) * node_gpu_num, MPL_MEM_OTHER);
+        assert(ze_ipc_handle_trees[i] != NULL);
+        for (int j = 0; j < node_gpu_num; ++j) {
+            ret_error = MPL_gavl_tree_create(need_thread_safety, &ze_ipc_handle_trees[i][j]);
+            if (ret_error != MPL_SUCCESS) {
+                MPL_gpu_finalize();
+                goto fn_exit;
+            }
+        }
+    }
   fn_exit:
     return MPL_SUCCESS;
   fn_fail:
@@ -101,18 +142,38 @@ int gpu_ze_init_driver()
 
 int MPL_gpu_finalize()
 {
+    if (ze_ipc_handle_trees) {
+        for (int i = 0; i < node_local_size; ++i)
+            if (ze_ipc_handle_trees[i]) {
+                for (int j = 0; j < node_gpu_num; ++j)
+                    if (ze_ipc_handle_trees[i][j])
+                        MPL_gavl_tree_free(ze_ipc_handle_trees[i], gpu_ipc_handle_free);
+                MPL_free(ze_ipc_handle_trees[i]);
+            }
+    }
+
+    MPL_free(global_ze_devices_handle);
+    MPL_free(ze_ipc_handle_trees);
     return MPL_SUCCESS;
 }
 
 int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_handle)
 {
+    int mpl_err;
     ze_result_t ret;
     ze_device_properties_t devproerty;
-    MPL_pointer_attr_t attr;
+    ze_memory_allocation_properties_t attr;
+    ze_device_handle_t device;
 
-    MPL_gpu_query_pointer_attr(ptr, &attr);
-    zeDeviceGetProperties(attr.device, &devproerty);
+    ipc_handle->remote_base_addr = (uintptr_t) ptr;
+    ipc_handle->len = len;
+    ipc_handle->node_rank = node_local_rank;
+
+    ret = zeDriverGetMemAllocProperties(global_ze_driver_handle, ptr, &attr, &device);
+    ZE_ERR_CHECK(ret);
+
     ipc_handle->offset = 0;
+    zeDeviceGetProperties(device, &devproerty);
     ipc_handle->global_dev_id = devproerty.deviceId;
     ret = zeDriverGetMemIpcHandle(global_ze_driver_handle, ptr, &ipc_handle->handle);
     ZE_ERR_CHECK(ret);
@@ -126,31 +187,51 @@ int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_ha
 int MPL_gpu_ipc_handle_map(MPL_gpu_ipc_mem_handle_t ipc_handle, MPL_gpu_device_handle_t dev_handle,
                            void **ptr)
 {
-    ze_result_t ret;
-    /* TODO: retrive global_dev_id for device handle */
-    ret =
-        zeDriverOpenMemIpcHandle(global_ze_driver_handle, ipc_handle.global_dev_id,
-                                 ipc_handle.handle, ZE_IPC_MEMORY_FLAG_NONE, ptr);
-    ZE_ERR_CHECK(ret);
+    int mpl_err = MPL_SUCCESS, dev_id;
+    int node_rank, found;
+    gpu_ipc_handle_obj_s *handle_obj;
+
+    dev_id = ipc_handle.dev_id;
+    node_rank = ipc_handle.node_rank;
+
+    mpl_err = MPL_gavl_tree_search
+        (ze_ipc_handle_trees[node_rank][dev_id], (void *) ipc_handle.remote_base_addr,
+         ipc_handle.len, (void **) &handle_obj);
+    if (mpl_err != MPL_SUCCESS)
+        goto fn_fail;
+
+    if (handle_obj == NULL) {
+        ze_result_t ret;
+        /* TODO: retrive dev_id for device handle */
+        handle_obj =
+            (gpu_ipc_handle_obj_s *) MPL_malloc(sizeof(gpu_ipc_handle_obj_s), MPL_MEM_OTHER);
+        assert(handle_obj != NULL);
+
+        ret =
+            zeDriverOpenMemIpcHandle(global_ze_driver_handle,
+                                     global_ze_devices_handle[ipc_handle.global_dev_id],
+                                     ipc_handle.handle, ZE_IPC_MEMORY_FLAG_NONE, ptr);
+        if (ret != ZE_RESULT_SUCCESS) {
+            mpl_err = MPL_ERR_GPU_INTERNAL;
+            goto fn_fail;
+        }
+
+        handle_obj->remote_base_addr = ipc_handle.remote_base_addr;
+        handle_obj->mapped_base_addr = (uintptr_t) * ptr;
+        handle_obj->offset = ipc_handle.offset;
+        mpl_err =
+            MPL_gavl_tree_insert(ze_ipc_handle_trees[node_rank][dev_id],
+                                 (void *) ipc_handle.remote_base_addr, ipc_handle.len, handle_obj);
+    } else {
+        *ptr =
+            (void *) (ipc_handle.remote_base_addr - handle_obj->remote_base_addr +
+                      handle_obj->mapped_base_addr);
+    }
 
   fn_exit:
-    return MPL_SUCCESS;
+    return mpl_err;
   fn_fail:
-    return MPL_ERR_GPU_INTERNAL;
-}
-
-int MPL_gpu_ipc_handle_unmap(void *ptr, MPL_gpu_ipc_mem_handle_t ipc_handle)
-{
-    ze_result_t ret;
-    ret =
-        zeDriverCloseMemIpcHandle(global_ze_driver_handle,
-                                  (void *) ((char *) ptr - ipc_handle.offset));
-    ZE_ERR_CHECK(ret);
-
-  fn_exit:
-    return MPL_SUCCESS;
-  fn_fail:
-    return MPL_ERR_GPU_INTERNAL;
+    goto fn_exit;
 }
 
 int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr)
@@ -275,6 +356,15 @@ int MPL_gpu_get_global_visiable_dev(int *dev_map, int len)
     /* TODO: check Intel GPU mask env variable */
     for (int i = 0; i < len; ++i)
         dev_map[i] = 1;
+}
+
+static void gpu_ipc_handle_free(void *handle_obj)
+{
+    gpu_ipc_handle_obj_s *handle_obj_ptr = (gpu_ipc_handle_obj_s *) handle_obj;
+    zeDriverCloseMemIpcHandle(global_ze_driver_handle,
+                              handle_obj_ptr->mapped_base_addr - handle_obj_ptr->offset);
+    MPL_free(handle_obj);
+    return;
 }
 
 #endif /* MPL_HAVE_ZE */

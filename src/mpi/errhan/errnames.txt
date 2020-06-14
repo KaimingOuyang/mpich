@@ -1501,7 +1501,6 @@ is too big (> MPIU_SHMW_GHND_SZ)
 **gpu_query_ptr: gpu_query_pointer_attr failed
 **gpu_ipc_handle_map: gpu_ipc_handle_map failed
 **gpu_ipc_handle_create: gpu_ipc_handle_create failed
-**gpu_ipc_handle_unmap: gpu_ipc_handle_unmap failed
 
 ## GAVL tree related error messages
 **mpl_gavl_search: mpl_gavl_search failed

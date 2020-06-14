@@ -33,7 +33,6 @@ int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr);
 int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_handle);
 int MPL_gpu_ipc_handle_map(MPL_gpu_ipc_mem_handle_t ipc_handle, MPL_gpu_device_handle_t dev_handle,
                            void **ptr);
-int MPL_gpu_ipc_handle_unmap(void *ptr, MPL_gpu_ipc_mem_handle_t ipc_handle);
 
 int MPL_gpu_malloc_host(void **ptr, size_t size);
 int MPL_gpu_free_host(void *ptr);
@@ -43,7 +42,7 @@ int MPL_gpu_unregister_host(const void *ptr);
 int MPL_gpu_malloc(void **ptr, size_t size, MPL_gpu_device_handle_t h_device);
 int MPL_gpu_free(void *ptr);
 
-int MPL_gpu_init(int *max_dev_id_ptr);
+int MPL_gpu_init(int local_size, int node_rank, int need_thread_safety, int *max_dev_id_ptr);
 int MPL_gpu_finalize(void);
 
 int MPL_gpu_ipc_handle_get_local_dev(MPL_gpu_ipc_mem_handle_t ipc_handle,

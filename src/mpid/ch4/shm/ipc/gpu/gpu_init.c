@@ -15,7 +15,9 @@ int MPIDI_GPU_mpi_init_hook(int rank, int size, int *tag_bits)
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_MPI_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_MPI_INIT_HOOK);
     MPIR_CHKPMEM_DECL(1);
-    mpl_err = MPL_gpu_init(&local_max_dev_id);
+    mpl_err =
+        MPL_gpu_init(MPIR_Process.local_size, MPIR_Process.local_rank,
+                     MPIR_ThreadInfo.thread_provided == MPI_THREAD_MULTIPLE, &local_max_dev_id);
     if (mpl_err != MPL_SUCCESS)
         mpi_errno = MPI_ERR_OTHER;
 
