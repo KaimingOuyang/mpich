@@ -46,4 +46,6 @@ int MPL_gpu_free(void *ptr);
 int MPL_gpu_init(void);
 int MPL_gpu_finalize(void);
 
+int MPL_gpu_ipc_handle_get_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id);
+
 #endif /* ifndef MPL_GPU_H_INCLUDED */

@@ -255,4 +255,10 @@ int MPL_gpu_unregister_host(const void *ptr)
     return MPL_SUCCESS;
 }
 
+int MPL_gpu_ipc_handle_get_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id)
+{
+    *dev_id = ipc_handle.dev_id;
+    return MPL_SUCCESS;
+}
+
 #endif /* MPL_HAVE_ZE */
