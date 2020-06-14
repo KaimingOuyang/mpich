@@ -17,7 +17,7 @@ int MPIDI_XPMEM_mpi_finalize_hook(void)
 }
 
 int MPIDI_XPMEM_ipc_handle_map(int node_rank, MPIDI_XPMEM_ipc_handle_t handle,
-                               size_t size, void **vaddr)
+                               uintptr_t size, void **vaddr)
 {
     return MPI_SUCCESS;
 }

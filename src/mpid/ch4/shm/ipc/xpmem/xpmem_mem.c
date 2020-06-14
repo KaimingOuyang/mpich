@@ -6,7 +6,7 @@
 #include "xpmem_post.h"
 
 int MPIDI_XPMEM_ipc_handle_map(int node_rank,
-                               MPIDI_XPMEM_ipc_handle_t handle, size_t size, void **vaddr)
+                               MPIDI_XPMEM_ipc_handle_t handle, uintptr_t size, void **vaddr)
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_IPC_HANDLE_MAP);
