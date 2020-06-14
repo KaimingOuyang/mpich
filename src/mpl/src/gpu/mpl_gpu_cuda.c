@@ -4,9 +4,42 @@
  */
 
 #include "mpl.h"
+#include "uthash.h"
+#include <assert.h>
 
 #define CUDA_ERR_CHECK(ret) if (unlikely((ret) != cudaSuccess)) goto fn_fail
 #define CU_ERR_CHECK(ret) if (unlikely((ret) != CUDA_SUCCESS)) goto fn_fail
+
+struct cache_elem {
+    int local_dev_id;
+    int global_dev_id;
+    UT_hash_handle hh;
+};
+
+static struct cache_elem *local_to_global_dev_id = NULL;
+static struct cache_elem *global_to_local_dev_id = NULL;
+
+static int get_global_dev_id(int local_dev_id)
+{
+    struct cache_elem *tmp;
+    HASH_FIND_INT(local_to_global_dev_id, &local_dev_id, tmp);
+
+    /* local to global device mapping should always succeed */
+    assert(tmp);
+
+    return tmp->global_dev_id;
+}
+
+static int get_local_dev_id(int global_dev_id)
+{
+    struct cache_elem *tmp;
+    HASH_FIND_INT(global_to_local_dev_id, &global_dev_id, tmp);
+
+    if (tmp)
+        return tmp->local_dev_id;
+    else
+        return -1;
+}
 
 int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr)
 {
@@ -53,7 +86,7 @@ int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_ha
     struct cudaPointerAttributes ptr_attr;
 
     ret = cudaPointerGetAttributes(&ptr_attr, ptr);
-    ipc_handle->dev_id = ptr_attr.device;
+    ipc_handle->global_dev_id = get_global_dev_id(ptr_attr.device);
 
     curet = cuMemGetAddressRange(&pbase, NULL, (CUdeviceptr) ptr);
     CU_ERR_CHECK(curet);
@@ -182,16 +215,64 @@ int MPL_gpu_free(void *ptr)
 
 int MPL_gpu_init()
 {
+    int count;
+    cudaError_t ret = cudaGetDeviceCount(&count);
+
+    char *visible_devices = getenv("CUDA_VISIBLE_DEVICES");
+    int *global_dev_map = (int *) MPL_malloc(count * sizeof(int), MPL_MEM_OTHER);
+
+    if (visible_devices) {
+        for (int i = 0; i < count; i++) {
+            char *tmp = strtok(visible_devices, ",");
+            assert(tmp);
+            global_dev_map[i] = atoi(tmp);
+            visible_devices = NULL;
+        }
+    } else {
+        for (int i = 0; i < count; i++) {
+            global_dev_map[i] = i;
+        }
+    }
+
+    for (int i = 0; i < count; i++) {
+        struct cache_elem *elem = (struct cache_elem *) MPL_malloc(sizeof(struct cache_elem),
+                                                                   MPL_MEM_OTHER);
+        elem->local_dev_id = i;
+        elem->global_dev_id = global_dev_map[i];
+        HASH_ADD_INT(local_to_global_dev_id, local_dev_id, elem, MPL_MEM_OTHER);
+    }
+
+    for (int i = 0; i < count; i++) {
+        struct cache_elem *elem = (struct cache_elem *) MPL_malloc(sizeof(struct cache_elem),
+                                                                   MPL_MEM_OTHER);
+        elem->local_dev_id = i;
+        elem->global_dev_id = global_dev_map[i];
+        HASH_ADD_INT(global_to_local_dev_id, global_dev_id, elem, MPL_MEM_OTHER);
+    }
+
+    MPL_free(global_dev_map);
+
     return MPL_SUCCESS;
 }
 
 int MPL_gpu_finalize()
 {
+    struct cache_elem *current, *tmp;
+    HASH_ITER(hh, local_to_global_dev_id, current, tmp) {
+        HASH_DEL(local_to_global_dev_id, current);
+        MPL_free(current);
+    }
+    HASH_ITER(hh, global_to_local_dev_id, current, tmp) {
+        HASH_DEL(global_to_local_dev_id, current);
+        MPL_free(current);
+    }
+
     return MPL_SUCCESS;
 }
 
-int MPL_gpu_ipc_handle_get_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id)
+int MPL_gpu_ipc_handle_get_dev(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id,
+                               MPL_gpu_ipc_handle_get_dev * dev_handle)
 {
-    *dev_id = ipc_handle.dev_id;
+    *dev_handle = *dev_id = get_local_dev_id(ipc_handle.global_dev_id);
     return MPL_SUCCESS;
 }

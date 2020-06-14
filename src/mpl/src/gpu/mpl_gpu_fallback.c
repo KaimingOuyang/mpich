@@ -76,7 +76,8 @@ int MPL_gpu_finalize()
     return MPL_SUCCESS;
 }
 
-int MPL_gpu_ipc_handle_get_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id)
+int MPL_gpu_ipc_handle_get_dev(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id,
+                               MPL_gpu_ipc_handle_get_dev * dev_handle)
 {
     return MPL_SUCCESS;
 }

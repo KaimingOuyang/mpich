@@ -56,11 +56,17 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_get_mem_attr(const void *vaddr, MPIDI_IPC
 MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_attach_mem(MPIDI_GPU_mem_handle_t mem_handle,
                                                   MPL_gpu_device_handle_t dev_handle, void **vaddr)
 {
+    int remote_dev_id;
+    MPL_gpu_device_handle_t remote_dev_handle;
     int mpi_errno = MPI_SUCCESS, mpl_err = MPL_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_ATTACH_MEM);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_ATTACH_MEM);
 
-    mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, dev_handle, vaddr);
+    MPL_gpu_ipc_handle_get_dev(memhandle.ipc_handle, &remote_dev_id, &remote_dev_handle);
+    if (remote_dev_id == -1)
+        mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, dev_handle, vaddr);
+    else
+        mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, remote_dev_handle, vaddr);
     MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, "**gpu_ipc_handle_map");
 
   fn_exit:
