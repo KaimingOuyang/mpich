@@ -53,7 +53,7 @@ typedef struct win_shared_info {
     uint32_t disp_unit;
     size_t size;
     MPIDI_IPCI_type_t ipc_type;
-    MPIDI_IPCI_mem_handle_t mem_handle;
+    MPIDI_IPCI_ipc_handle_t ipc_handle;
 } win_shared_info_t;
 
 int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
@@ -66,7 +66,7 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
     MPIDIG_win_shared_info_t *shared_table = NULL;
     win_shared_info_t *ipc_shared_table = NULL; /* temporary exchange buffer */
     int *ranks_in_shm_grp = NULL;
-    MPIDI_IPCI_mem_attr_t attr;
+    MPIDI_IPCI_ipc_attr_t ipc_attr;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPC_MPI_WIN_CREATE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPC_MPI_WIN_CREATE_HOOK);
@@ -80,11 +80,11 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
 
     /* Determine IPC type based on buffer type and submodule availability.
      * We always exchange in case any remote buffer can be shared by IPC. */
-    MPIDI_IPCI_get_mem_attr(win->base, &attr);
+    MPIDI_IPCI_get_ipc_attr(win->base, &ipc_attr);
 
     /* Disable local IPC for zero buffer */
     if (win->size == 0)
-        attr.ipc_type = MPIDI_IPCI_TYPE__NONE;
+        ipc_attr.ipc_type = MPIDI_IPCI_TYPE__NONE;
 
     /* Exchange shared memory region information */
     MPIR_T_PVAR_TIMER_START(RMA, rma_wincreate_allgather);
@@ -106,8 +106,8 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
     memset(&ipc_shared_table[shm_comm_ptr->rank], 0, sizeof(win_shared_info_t));
     ipc_shared_table[shm_comm_ptr->rank].size = win->size;
     ipc_shared_table[shm_comm_ptr->rank].disp_unit = win->disp_unit;
-    ipc_shared_table[shm_comm_ptr->rank].ipc_type = attr.ipc_type;
-    ipc_shared_table[shm_comm_ptr->rank].mem_handle = attr.mem_handle;
+    ipc_shared_table[shm_comm_ptr->rank].ipc_type = ipc_attr.ipc_type;
+    ipc_shared_table[shm_comm_ptr->rank].ipc_handle = ipc_attr.ipc_handle;
 
     mpi_errno = MPIR_Allgather(MPI_IN_PLACE,
                                0,
@@ -151,9 +151,9 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
         } else {
             /* Attach only remote buffer. No-op if ipc_type is NONE including zero-size. */
             int node_rank = ranks_in_shm_grp[shm_comm_ptr->local_size + i];
-            mpi_errno = MPIDI_IPCI_attach_mem(ipc_shared_table[i].ipc_type, node_rank,
-                                              ipc_shared_table[i].mem_handle,
-                                              attr.gpu_attr.device,
+            mpi_errno = MPIDI_IPCI_handle_map(ipc_shared_table[i].ipc_type, node_rank,
+                                              ipc_shared_table[i].ipc_handle,
+                                              ipc_attr.gpu_attr.device,
                                               ipc_shared_table[i].size,
                                               MPI_INT, &shared_table[i].shm_base_addr);
             MPIR_ERR_CHECK(mpi_errno);

@@ -7,9 +7,7 @@
 #define XPMEM_PRE_H_INCLUDED
 
 /* memory handle definition */
-typedef struct {
-    uint64_t src_offset;
-} MPIDI_XPMEM_mem_handle_t;
+typedef uintptr_t MPIDI_XPMEM_ipc_handle_t;
 
 /* request extension definition */
 typedef struct {

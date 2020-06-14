@@ -47,14 +47,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPC_mpi_isend(const void *buf, MPI_Aint count
 
     MPIDI_Datatype_check_contig_size_lb(datatype, count, dt_contig, data_sz, true_lb);
 
-    MPIDI_IPCI_mem_attr_t attr;
-    MPIDI_IPCI_get_mem_attr((char *) buf + true_lb, &attr);
+    MPIDI_IPCI_ipc_attr_t ipc_attr;
+    MPIDI_IPCI_get_ipc_attr((char *) buf + true_lb, &ipc_attr);
 
-    if (rank != comm->rank && attr.ipc_type != MPIDI_IPCI_TYPE__NONE &&
-        data_sz >= attr.threshold.send_lmt_sz) {
+    if (rank != comm->rank && ipc_attr.ipc_type != MPIDI_IPCI_TYPE__NONE &&
+        data_sz >= ipc_attr.threshold.send_lmt_sz) {
         if (dt_contig) {
             mpi_errno = MPIDI_IPCI_send_contig_lmt(buf, count, datatype, data_sz, rank, tag, comm,
-                                                   context_offset, addr, attr, request);
+                                                   context_offset, addr, ipc_attr, request);
             MPIR_ERR_CHECK(mpi_errno);
             goto fn_exit;
         }

@@ -12,55 +12,55 @@
 #include "../gpu/gpu_post.h"
 
 /* Get local memory handle. No-op if the IPC type is NONE. */
-MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_get_mem_attr(const void *vaddr,
-                                                     MPIDI_IPCI_mem_attr_t * attr)
+MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_get_ipc_attr(const void *vaddr,
+                                                     MPIDI_IPCI_ipc_attr_t * ipc_attr)
 {
     int mpi_errno = MPI_SUCCESS;
 
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_GET_MEM_ATTR);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_GET_MEM_ATTR);
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_IPC_ATTR_CREATE);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_IPC_ATTR_CREATE);
 
-    MPIR_GPU_query_pointer_attr(vaddr, &attr->gpu_attr);
+    MPIR_GPU_query_pointer_attr(vaddr, &ipc_attr->gpu_attr);
 
-    if (attr->gpu_attr.type == MPL_GPU_POINTER_DEV) {
-        mpi_errno = MPIDI_GPU_get_mem_attr(vaddr, attr);
+    if (ipc_attr->gpu_attr.type == MPL_GPU_POINTER_DEV) {
+        mpi_errno = MPIDI_GPU_get_ipc_attr(vaddr, ipc_attr);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
-        mpi_errno = MPIDI_XPMEM_get_mem_attr(vaddr, attr);
+        mpi_errno = MPIDI_XPMEM_get_ipc_attr(vaddr, ipc_attr);
         MPIR_ERR_CHECK(mpi_errno);
     }
 
   fn_exit:
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_GET_MEM_ATTR);
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_IPC_ATTR_CREATE);
     return mpi_errno;
   fn_fail:
-    attr->ipc_type = MPIDI_IPCI_TYPE__NONE;
-    memset(&attr->mem_handle, 0, sizeof(MPIDI_IPCI_mem_handle_t));
+    ipc_attr->ipc_type = MPIDI_IPCI_TYPE__NONE;
+    memset(&ipc_attr->ipc_handle, 0, sizeof(MPIDI_IPCI_ipc_handle_t));
     goto fn_exit;
 }
 
 /* Attach remote memory handle. Return the local memory segment handle and
  * the mapped virtual address. No-op if the IPC type is NONE. */
-MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_attach_mem(MPIDI_IPCI_type_t ipc_type,
+MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_map(MPIDI_IPCI_type_t ipc_type,
                                                    int node_rank,
-                                                   MPIDI_IPCI_mem_handle_t mem_handle,
+                                                   MPIDI_IPCI_ipc_handle_t ipc_handle,
                                                    MPL_gpu_device_handle_t dev_handle, size_t size,
                                                    int src_dt_contig,
                                                    MPI_Datatype recv_type, void **vaddr)
 {
     int mpi_errno = MPI_SUCCESS;
 
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_ATTACH_MEM);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_ATTACH_MEM);
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_HANDLE_MAP);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_HANDLE_MAP);
 
     switch (ipc_type) {
         case MPIDI_IPCI_TYPE__XPMEM:
-            mpi_errno = MPIDI_XPMEM_attach_mem(node_rank, mem_handle.xpmem, size, vaddr);
+            mpi_errno = MPIDI_XPMEM_ipc_handle_map(node_rank, ipc_handle.xpmem, size, vaddr);
             break;
         case MPIDI_IPCI_TYPE__GPU:
             mpi_errno =
-                MPIDI_GPU_attach_mem(node_rank, mem_handle.gpu, dev_handle, src_dt_contig,
-                                     recv_type, vaddr);
+                MPIDI_GPU_ipc_handle_map(node_rank, ipc_handle.gpu, dev_handle, src_dt_contig,
+                                         recv_type, vaddr);
             break;
         case MPIDI_IPCI_TYPE__NONE:
             /* no-op */
@@ -71,23 +71,23 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_attach_mem(MPIDI_IPCI_type_t ipc_type,
             break;
     }
 
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_ATTACH_MEM);
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_HANDLE_MAP);
     return mpi_errno;
 }
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_close_mem(MPIDI_IPCI_type_t ipc_type, void *vaddr,
-                                                  MPIDI_IPCI_mem_handle_t mem_handle)
+MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_unmap(MPIDI_IPCI_type_t ipc_type, void *vaddr,
+                                                     MPIDI_IPCI_ipc_handle_t ipc_handle)
 {
     int mpi_errno = MPI_SUCCESS;
 
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_CLOSE_MEM);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_CLOSE_MEM);
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_HANDLE_UNMAP);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_HANDLE_UNMAP);
 
     switch (ipc_type) {
         case MPIDI_IPCI_TYPE__XPMEM:
             break;
         case MPIDI_IPCI_TYPE__GPU:
-            mpi_errno = MPIDI_GPU_close_mem(vaddr, mem_handle.gpu.ipc_handle);
+            mpi_errno = MPIDI_GPU_ipc_handle_unmap(vaddr, ipc_handle.gpu);
             break;
         case MPIDI_IPCI_TYPE__NONE:
             /* noop */
@@ -98,7 +98,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_close_mem(MPIDI_IPCI_type_t ipc_type, vo
             break;
     }
 
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_CLOSE_MEM_HANDLE);
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_HANDLE_UNMAP);
     return mpi_errno;
 }
 

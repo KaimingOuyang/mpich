@@ -6,9 +6,9 @@
 #ifndef GPU_PRE_H_INCLUDED
 #define GPU_PRE_H_INCLUDED
 
-typedef struct MPIDI_GPU_mem_handle {
-    MPL_gpu_ipc_mem_handle_t ipc_handle;
-} MPIDI_GPU_mem_handle_t;
+#include "mpl.h"
+
+typedef MPL_gpu_ipc_mem_handle_t MPIDI_GPU_ipc_handle_t;
 
 typedef struct {
     int **visible_dev_global_id;
