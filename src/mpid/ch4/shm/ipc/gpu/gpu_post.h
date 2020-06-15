@@ -53,20 +53,39 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_get_mem_attr(const void *vaddr, MPIDI_IPC
     goto fn_exit;
 }
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_attach_mem(MPIDI_GPU_mem_handle_t mem_handle,
-                                                  MPL_gpu_device_handle_t dev_handle, void **vaddr)
+MPL_STATIC_INLINE_PREFIX int MPIDI_GPU_attach_mem(int node_rank, MPIDI_GPU_mem_handle_t mem_handle,
+                                                  MPL_gpu_device_handle_t dev_handle,
+                                                  int src_dt_contig,
+                                                  MPI_Datatype recv_type, void **vaddr)
 {
     int remote_dev_id;
     MPL_gpu_device_handle_t remote_dev_handle;
     int mpi_errno = MPI_SUCCESS, mpl_err = MPL_SUCCESS;
+    int remote_global_dev_id, recv_dt_contig;
+    uintptr_t recv_dt_sz;
+    MPI_Aint iov_len;
+    double recv_dt_density;
+
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_ATTACH_MEM);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_ATTACH_MEM);
 
-    MPL_gpu_ipc_handle_get_dev(memhandle.ipc_handle, &remote_dev_id, &remote_dev_handle);
-    if (remote_dev_id == -1)
+    MPIDI_Datatype_check_contig(recv_type, recv_dt_contig);
+    MPL_gpu_ipc_handle_get_global_dev_id(mem_handle.ipc_handle, &remote_global_dev_id);
+    if (!MPIDI_gpu_global.visible_dev_global_id[node_rank][remote_global_dev_id]) {
         mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, dev_handle, vaddr);
-    else
-        mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, remote_dev_handle, vaddr);
+    } else {
+        MPL_gpu_ipc_handle_get_local_dev(mem_handle.ipc_handle, &remote_dev_handle);
+        if (src_dt_contig && !recv_dt_contig)
+            mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, dev_handle, vaddr);
+        else if (((src_dt_contig && recv_dt_contig) || (!src_dt_contig && recv_dt_contig)))
+            mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, remote_dev_handle, vaddr);
+        else {
+            /* TODO: after get remote datatype, we can compare remote and local datatype density
+             * to decide which gpu to map buffer onto. For now, we just add dummy mapping. */
+            MPIR_Datatype_get_density(recv_type, recv_dt_density);
+            mpl_err = MPL_gpu_ipc_handle_map(mem_handle.ipc_handle, dev_handle, vaddr);
+        }
+    }
     MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, "**gpu_ipc_handle_map");
 
   fn_exit:

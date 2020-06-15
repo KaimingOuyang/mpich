@@ -155,7 +155,7 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
                                               ipc_shared_table[i].mem_handle,
                                               attr.gpu_attr.device,
                                               ipc_shared_table[i].size,
-                                              &shared_table[i].shm_base_addr);
+                                              MPI_INT, &shared_table[i].shm_base_addr);
             MPIR_ERR_CHECK(mpi_errno);
         }
         IPC_TRACE("shared_table[%d]: size=0x%lx, disp_unit=0x%x, shm_base_addr=%p (ipc_type=%d)\n",

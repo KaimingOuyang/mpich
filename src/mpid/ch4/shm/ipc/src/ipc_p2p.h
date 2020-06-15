@@ -112,8 +112,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
     MPL_pointer_attr_t attr;
     MPIR_GPU_query_pointer_attr(MPIDIG_REQUEST(rreq, buffer), &attr);
 
-    mpi_errno = MPIDI_IPCI_attach_mem(ipc_type, src_lrank, mem_handle, attr.device, src_data_sz,
-                                      &src_buf);
+    mpi_errno =
+        MPIDI_IPCI_attach_mem(ipc_type, src_lrank, mem_handle, attr.device, src_data_sz,
+                              1, MPIDIG_REQUEST(rreq, datatype), &src_buf);
     MPIR_ERR_CHECK(mpi_errno);
 
     IPC_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, "

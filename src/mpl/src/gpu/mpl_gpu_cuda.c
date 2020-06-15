@@ -213,9 +213,9 @@ int MPL_gpu_free(void *ptr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_init()
+int MPL_gpu_init(int *max_dev_id_ptr)
 {
-    int count;
+    int count, max_dev_id = -1;
     cudaError_t ret = cudaGetDeviceCount(&count);
 
     char *visible_devices = getenv("CUDA_VISIBLE_DEVICES");
@@ -226,9 +226,12 @@ int MPL_gpu_init()
             char *tmp = strtok(visible_devices, ",");
             assert(tmp);
             global_dev_map[i] = atoi(tmp);
+            if (global_dev_map[i] > max_dev_id)
+                max_dev_id = global_dev_map[i];
             visible_devices = NULL;
         }
     } else {
+        max_dev_id = count - 1;
         for (int i = 0; i < count; i++) {
             global_dev_map[i] = i;
         }
@@ -250,6 +253,7 @@ int MPL_gpu_init()
         HASH_ADD_INT(global_to_local_dev_id, global_dev_id, elem, MPL_MEM_OTHER);
     }
 
+    *max_dev_id_ptr = max_dev_id;
     MPL_free(global_dev_map);
 
     return MPL_SUCCESS;
@@ -270,9 +274,40 @@ int MPL_gpu_finalize()
     return MPL_SUCCESS;
 }
 
-int MPL_gpu_ipc_handle_get_dev(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id,
-                               MPL_gpu_ipc_handle_get_dev * dev_handle)
+int MPL_gpu_ipc_handle_get_local_dev(MPL_gpu_ipc_mem_handle_t ipc_handle,
+                                     MPL_gpu_device_handle_t * dev_handle)
 {
-    *dev_handle = *dev_id = get_local_dev_id(ipc_handle.global_dev_id);
+    *dev_handle = get_local_dev_id(ipc_handle.global_dev_id);
     return MPL_SUCCESS;
+}
+
+int MPL_gpu_ipc_handle_get_global_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id)
+{
+    *dev_id = ipc_handle.global_dev_id;
+    return MPL_SUCCESS;
+}
+
+int MPL_gpu_get_global_visiable_dev(int *dev_map, int len)
+{
+    char *visible_devices = getenv("CUDA_VISIBLE_DEVICES");
+    if (visible_devices) {
+        int count;
+        cudaError_t ret = cudaGetDeviceCount(&count);
+        CUDA_ERR_CHECK(ret);
+
+        memset(dev_map, 0, sizeof(int) * len);
+        for (int i = 0; i < count; i++) {
+            char *tmp = strtok(visible_devices, ",");
+            assert(tmp);
+            dev_map[atoi(tmp)] = 1;
+            visible_devices = NULL;
+        }
+    } else {
+        for (int i = 0; i < len; ++i)
+            dev_map[i] = 1;
+    }
+  fn_exit:
+    return MPL_SUCCESS;
+  fn_fail:
+    return MPL_ERR_GPU_INTERNAL;
 }

@@ -43,10 +43,11 @@ int MPL_gpu_unregister_host(const void *ptr);
 int MPL_gpu_malloc(void **ptr, size_t size, MPL_gpu_device_handle_t h_device);
 int MPL_gpu_free(void *ptr);
 
-int MPL_gpu_init(void);
+int MPL_gpu_init(int *max_dev_id_ptr);
 int MPL_gpu_finalize(void);
 
-int MPL_gpu_ipc_handle_get_dev(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id,
-                               MPL_gpu_device_handle_t * dev_handle);
-
+int MPL_gpu_ipc_handle_get_local_dev(MPL_gpu_ipc_mem_handle_t ipc_handle,
+                                     MPL_gpu_device_handle_t * dev_handle);
+int MPL_gpu_ipc_handle_get_global_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id);
+int MPL_gpu_get_global_visiable_dev(int *dev_map, int len);
 #endif /* ifndef MPL_GPU_H_INCLUDED */

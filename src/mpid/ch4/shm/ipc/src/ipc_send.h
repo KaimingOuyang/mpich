@@ -6,6 +6,25 @@
 #ifndef IPC_SEND_H_INCLUDED
 #define IPC_SEND_H_INCLUDED
 
+/*
+=== BEGIN_MPI_T_CVAR_INFO_BLOCK ===
+
+cvars:
+    - name        : MPIR_CVAR_CH4_IPC_GPU_DT_DENSITY_THRESHOLD
+      category    : CH4
+      type        : double
+      default     : 8.0
+      class       : none
+      verbosity   : MPI_T_VERBOSITY_USER_BASIC
+      scope       : MPI_T_SCOPE_ALL_EQ
+      description : >-
+        if remote datatype density is larger than this threshold, local process
+        will try to map gpu buffer onto local gpu device; else it try to map onto
+        remote gpu device.
+
+=== END_MPI_T_CVAR_INFO_BLOCK ===
+*/
+
 #include "ch4_impl.h"
 #include "mpidimpl.h"
 #include "shm_control.h"

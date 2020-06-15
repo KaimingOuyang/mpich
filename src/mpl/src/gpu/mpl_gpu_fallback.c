@@ -66,7 +66,7 @@ int MPL_gpu_free(void *ptr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_init()
+int MPL_gpu_init(int *max_dev_id_ptr)
 {
     return MPL_SUCCESS;
 }
@@ -76,8 +76,18 @@ int MPL_gpu_finalize()
     return MPL_SUCCESS;
 }
 
-int MPL_gpu_ipc_handle_get_dev(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id,
-                               MPL_gpu_ipc_handle_get_dev * dev_handle)
+int MPL_gpu_ipc_handle_get_local_dev(MPL_gpu_ipc_mem_handle_t ipc_handle,
+                                     MPL_gpu_ipc_handle_get_dev * dev_handle)
+{
+    return MPL_SUCCESS;
+}
+
+int MPL_gpu_ipc_handle_get_global_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id)
+{
+    return MPL_SUCCESS;
+}
+
+int MPL_gpu_get_global_visiable_dev(int *dev_map, int len)
 {
     return MPL_SUCCESS;
 }

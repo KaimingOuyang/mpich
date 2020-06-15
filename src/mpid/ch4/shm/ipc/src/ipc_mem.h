@@ -45,7 +45,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_attach_mem(MPIDI_IPCI_type_t ipc_type,
                                                    int node_rank,
                                                    MPIDI_IPCI_mem_handle_t mem_handle,
                                                    MPL_gpu_device_handle_t dev_handle, size_t size,
-                                                   void **vaddr)
+                                                   int src_dt_contig,
+                                                   MPI_Datatype recv_type, void **vaddr)
 {
     int mpi_errno = MPI_SUCCESS;
 
@@ -57,7 +58,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_attach_mem(MPIDI_IPCI_type_t ipc_type,
             mpi_errno = MPIDI_XPMEM_attach_mem(node_rank, mem_handle.xpmem, size, vaddr);
             break;
         case MPIDI_IPCI_TYPE__GPU:
-            mpi_errno = MPIDI_GPU_attach_mem(mem_handle.gpu, dev_handle, vaddr);
+            mpi_errno =
+                MPIDI_GPU_attach_mem(node_rank, mem_handle.gpu, dev_handle, src_dt_contig,
+                                     recv_type, vaddr);
             break;
         case MPIDI_IPCI_TYPE__NONE:
             /* no-op */

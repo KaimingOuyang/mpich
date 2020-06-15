@@ -18,12 +18,14 @@ int gpu_ze_init_driver();
             goto fn_fail; \
     } while (0)
 
-int MPL_gpu_init()
+int MPL_gpu_init(int *max_dev_id_ptr)
 {
     int ret_error;
     ret_error = gpu_ze_init_driver();
     if (ret_error != MPL_SUCCESS)
         goto fn_fail;
+
+    zeDeviceGet(global_ze_driver_handle, max_dev_id_ptr, NULL);
 
   fn_exit:
     return MPL_SUCCESS;
@@ -255,11 +257,24 @@ int MPL_gpu_unregister_host(const void *ptr)
     return MPL_SUCCESS;
 }
 
-int MPL_gpu_ipc_handle_get_dev(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id,
-                               MPL_gpu_ipc_handle_get_dev * dev_handle)
+int MPL_gpu_ipc_handle_get_local_dev(MPL_gpu_ipc_mem_handle_t ipc_handle,
+                                     MPL_gpu_ipc_handle_get_dev * dev_handle)
 {
     *dev_id = ipc_handle.dev_id;
     return MPL_SUCCESS;
+}
+
+int MPL_gpu_ipc_handle_get_global_dev_id(MPL_gpu_ipc_mem_handle_t ipc_handle, int *dev_id)
+{
+    *dev_id = ipc_handle.dev_id;
+    return MPL_SUCCESS;
+}
+
+int MPL_gpu_get_global_visiable_dev(int *dev_map, int len)
+{
+    /* TODO: check Intel GPU mask env variable */
+    for (int i = 0; i < len; ++i)
+        dev_map[i] = 1;
 }
 
 #endif /* MPL_HAVE_ZE */
