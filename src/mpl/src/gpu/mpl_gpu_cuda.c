@@ -4,6 +4,7 @@
  */
 
 #include "mpl.h"
+#include <assert.h>
 
 #define CUDA_ERR_CHECK(ret) if (unlikely((ret) != cudaSuccess)) goto fn_fail
 #define CU_ERR_CHECK(ret) if (unlikely((ret) != CUDA_SUCCESS)) goto fn_fail
@@ -176,9 +177,15 @@ int MPL_gpu_free(void *ptr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_init()
+int MPL_gpu_init(int *device_count)
 {
+    cudaError_t ret = cudaGetDeviceCount(device_count);
+    CUDA_ERR_CHECK(ret);
+
+  fn_exit:
     return MPL_SUCCESS;
+  fn_fail:
+    return MPL_ERR_GPU_INTERNAL;
 }
 
 int MPL_gpu_finalize()
@@ -196,4 +203,32 @@ int MPL_gpu_get_dev_handle(int dev_id, MPL_gpu_device_handle_t * dev_handle)
 {
     *dev_handle = dev_id;
     return MPL_SUCCESS;
+}
+
+int MPL_gpu_get_global_dev_ids(int *global_ids, int count)
+{
+    char *visible_devices = getenv("CUDA_VISIBLE_DEVICES");
+
+    if (visible_devices) {
+        uintptr_t len = strlen(visible_devices);
+        char *devices = MPL_malloc(len + 1, MPL_MEM_OTHER);
+        char *free_ptr = devices;
+        memcpy(devices, visible_devices, len + 1);
+        for (int i = 0; i < count; i++) {
+            char *tmp = strtok(devices, ",");
+            assert(tmp);
+            global_ids[i] = atoi(tmp);
+            devices = NULL;
+        }
+        MPL_free(free_ptr);
+    } else {
+        for (int i = 0; i < count; i++) {
+            global_ids[i] = i;
+        }
+    }
+
+  fn_exit:
+    return MPL_SUCCESS;
+  fn_fail:
+    return MPL_ERR_GPU_INTERNAL;
 }
