@@ -177,10 +177,34 @@ int MPL_gpu_free(void *ptr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_init(int *device_count)
+int MPL_gpu_init(int *device_count, int *max_dev_id_ptr)
 {
-    cudaError_t ret = cudaGetDeviceCount(device_count);
+    int count, max_dev_id = -1;
+    cudaError_t ret = cudaGetDeviceCount(&count);
     CUDA_ERR_CHECK(ret);
+
+    char *visible_devices = getenv("CUDA_VISIBLE_DEVICES");
+    if (visible_devices) {
+        uintptr_t len = strlen(visible_devices);
+        char *devices = MPL_malloc(len + 1, MPL_MEM_OTHER);
+        char *free_ptr = devices;
+        memcpy(devices, visible_devices, len + 1);
+        for (int i = 0; i < count; i++) {
+            int global_dev_id;
+            char *tmp = strtok(devices, ",");
+            assert(tmp);
+            global_dev_id = atoi(tmp);
+            if (global_dev_id > max_dev_id)
+                max_dev_id = global_dev_id;
+            devices = NULL;
+        }
+        MPL_free(free_ptr);
+    } else {
+        max_dev_id = count - 1;
+    }
+
+    *max_dev_id_ptr = max_dev_id;
+    *device_count = count;
 
   fn_exit:
     return MPL_SUCCESS;

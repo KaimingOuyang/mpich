@@ -66,7 +66,7 @@ int MPL_gpu_free(void *ptr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_init(int *device_count)
+int MPL_gpu_init(int *device_count, int *max_dev_id_ptr)
 {
     return MPL_SUCCESS;
 }

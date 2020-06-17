@@ -19,7 +19,7 @@ int gpu_ze_init_driver();
             goto fn_fail; \
     } while (0)
 
-int MPL_gpu_init(int *device_count_ptr)
+int MPL_gpu_init(int *device_count_ptr, int *max_dev_id_ptr)
 {
     int ret_error;
     int device_count;
@@ -34,7 +34,7 @@ int MPL_gpu_init(int *device_count_ptr)
     ret = zeDeviceGet(global_ze_driver_handle, &device_count, device_handles);
     ZE_ERR_CHECK(ret);
 
-    *device_count_ptr = device_count;
+    *max_dev_id_ptr = *device_count_ptr = device_count;
 
   fn_exit:
     return MPL_SUCCESS;

@@ -36,7 +36,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPC_mpi_isend(const void *buf, MPI_Aint count
     MPIR_GPU_query_pointer_attr(vaddr, &attr.gpu_attr);
 
     if (attr.gpu_attr.type == MPL_GPU_POINTER_DEV) {
-        mpi_errno = MPIDI_GPU_get_mem_attr(vaddr, &attr);
+        mpi_errno = MPIDI_GPU_get_mem_attr(vaddr, dt_contig, &attr);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
         mpi_errno = MPIDI_XPMEM_get_mem_attr(vaddr, data_sz, &attr);

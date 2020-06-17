@@ -83,7 +83,7 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
     MPIR_GPU_query_pointer_attr(win->base, &attr.gpu_attr);
 
     if (attr.gpu_attr.type == MPL_GPU_POINTER_DEV) {
-        mpi_errno = MPIDI_GPU_get_mem_attr(win->base, &attr);
+        mpi_errno = MPIDI_GPU_get_mem_attr(win->base, 1, &attr);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
         mpi_errno = MPIDI_XPMEM_get_mem_attr(win->base, win->size, &attr);
@@ -167,7 +167,8 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
                 case MPIDI_IPCI_TYPE__GPU:
                     mpi_errno =
                         MPIDI_GPU_attach_mem(ipc_shared_table[i].mem_handle.gpu,
-                                             attr.gpu_attr.device, &shared_table[i].shm_base_addr);
+                                             attr.gpu_attr.device, MPI_INT,
+                                             &shared_table[i].shm_base_addr);
                     break;
                 case MPIDI_IPCI_TYPE__NONE:
                     /* no-op */
