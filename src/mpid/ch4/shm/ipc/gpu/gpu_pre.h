@@ -6,13 +6,14 @@
 #ifndef GPU_PRE_H_INCLUDED
 #define GPU_PRE_H_INCLUDED
 
+#include "mpl.h"
 #include "uthash.h"
 
-typedef struct MPIDI_GPU_mem_handle {
+typedef struct MPIDI_GPU_ipc_handle {
     MPL_gpu_ipc_mem_handle_t ipc_handle;
     int global_dev_id;
     int src_dt_contig;
-} MPIDI_GPU_mem_handle_t;
+} MPIDI_GPU_ipc_handle_t;
 
 typedef struct MPIDI_gpu_dev_id {
     int local_dev_id;
