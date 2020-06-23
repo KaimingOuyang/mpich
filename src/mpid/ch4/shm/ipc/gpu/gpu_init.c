@@ -18,7 +18,8 @@ int MPIDI_GPU_mpi_init_hook(int rank, int size, int *tag_bits)
     MPIR_CHKPMEM_DECL(1);
 
     MPIDI_GPUI_global.initialized = 0;
-    mpl_err = MPL_gpu_init(&device_count, &my_max_dev_id);
+    mpl_err = MPL_gpu_init(MPIR_Process.local_size, MPIR_Process.local_rank,
+                           &device_count, &my_max_dev_id);
     MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, "**gpu_init");
 
     if (device_count == -1)

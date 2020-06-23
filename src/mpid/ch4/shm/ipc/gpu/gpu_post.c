@@ -68,10 +68,21 @@ int MPIDI_GPU_ipc_handle_map(MPIDI_GPU_ipc_handle_t handle,
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_IPC_HANDLE_MAP);
 
 #ifdef MPIDI_CH4_SHM_ENABLE_GPU
+    int recv_dev_id;
     int recv_dt_contig, mpl_err = MPL_SUCCESS;
     MPIDI_GPUI_dev_id_t *avail_id = NULL;
     MPIDI_Datatype_check_contig(recv_type, recv_dt_contig);
     HASH_FIND_INT(MPIDI_GPUI_global.global_to_local_map, &handle.global_dev_id, avail_id);
+
+    MPL_gpu_get_dev_id(dev_handle, &recv_dev_id);
+    if (recv_dev_id < 0) {
+        /* when receiver's buffer is on host memory, recv_dev_id will be less than 0.
+         * however, when we decide to map buffer onto receiver's device, this mapping
+         * will be invalid, so we need to assign a default gpu instead; for now, we
+         * assume process can at least access one GPU, so device id 0 is set. */
+        recv_dev_id = 0;
+        MPL_gpu_get_dev_handle(recv_dev_id, &dev_handle);
+    }
 
     if (avail_id == NULL)
         mpl_err = MPL_gpu_ipc_handle_map(handle.ipc_handle, dev_handle, vaddr);
@@ -91,22 +102,4 @@ int MPIDI_GPU_ipc_handle_map(MPIDI_GPU_ipc_handle_t handle,
     return mpi_errno;
   fn_fail:
     goto fn_exit;
-}
-
-int MPIDI_GPU_ipc_handle_unmap(void *vaddr, MPIDI_GPU_ipc_handle_t handle)
-{
-    int mpi_errno = MPI_SUCCESS;
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_IPC_HANDLE_UNMAP);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_IPC_HANDLE_UNMAP);
-
-#ifdef MPIDI_CH4_SHM_ENABLE_GPU
-    int mpl_err = MPL_SUCCESS;
-    mpl_err = MPL_gpu_ipc_handle_unmap(vaddr, handle.ipc_handle);
-    MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, "**gpu_ipc_handle_unmap");
-#endif
-
-  fn_exit:
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_GPU_IPC_HANDLE_UNMAP);
-    return mpi_errno;
-  fn_fail:goto fn_exit;
 }
