@@ -38,19 +38,27 @@ cvars:
 === END_MPI_T_CVAR_INFO_BLOCK ===
 */
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_get_ipc_attr(const void *vaddr, uintptr_t data_sz,
-                                                      MPIDI_IPCI_ipc_attr_t * ipc_attr)
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_ipc_handle_create(const void *vaddr, uintptr_t data_sz,
+                                                           MPIDI_XPMEM_ipc_handle_t * handle)
+{
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_IPC_HANDLE_CREATE);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_IPC_HANDLE_CREATE);
+
+    handle->src_offset = (uintptr_t) vaddr;
+    handle->data_sz = data_sz;
+    handle->src_lrank = MPIR_Process.local_rank;
+
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_XPMEM_IPC_HANDLE_CREATE);
+    return MPI_SUCCESS;
+}
+
+MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_get_ipc_attr(MPIDI_IPCI_ipc_attr_t * ipc_attr)
 {
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_GET_IPC_ATTR);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_GET_IPC_ATTR);
 
-    memset(&ipc_attr->ipc_handle, 0, sizeof(MPIDI_IPCI_ipc_handle_t));
-
 #ifdef MPIDI_CH4_SHM_ENABLE_XPMEM
     ipc_attr->ipc_type = MPIDI_IPCI_TYPE__XPMEM;
-    ipc_attr->ipc_handle.xpmem.src_offset = (uint64_t) vaddr;
-    ipc_attr->ipc_handle.xpmem.data_sz = data_sz;
-    ipc_attr->ipc_handle.xpmem.src_lrank = MPIR_Process.local_rank;
     if (MPIR_CVAR_CH4_XPMEM_ENABLE)
         ipc_attr->threshold.send_lmt_sz = MPIR_CVAR_CH4_IPC_XPMEM_P2P_THRESHOLD;
     else

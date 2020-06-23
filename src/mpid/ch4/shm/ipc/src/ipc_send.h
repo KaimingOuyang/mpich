@@ -35,17 +35,24 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPC_mpi_isend(const void *buf, MPI_Aint count
     vaddr = (char *) buf + true_lb;
     MPIR_GPU_query_pointer_attr(vaddr, &ipc_attr.gpu_attr);
 
-    if (ipc_attr.gpu_attr.type == MPL_GPU_POINTER_DEV) {
-        mpi_errno = MPIDI_GPU_get_ipc_attr(vaddr, &ipc_attr);
-        MPIR_ERR_CHECK(mpi_errno);
-    } else {
-        mpi_errno = MPIDI_XPMEM_get_ipc_attr(vaddr, data_sz, &ipc_attr);
-        MPIR_ERR_CHECK(mpi_errno);
-    }
+    if (ipc_attr.gpu_attr.type == MPL_GPU_POINTER_DEV)
+        mpi_errno = MPIDI_GPU_get_ipc_attr(&ipc_attr);
+    else
+        mpi_errno = MPIDI_XPMEM_get_ipc_attr(&ipc_attr);
+    MPIR_ERR_CHECK(mpi_errno);
 
     if (rank != comm->rank && ipc_attr.ipc_type != MPIDI_IPCI_TYPE__NONE &&
         data_sz >= ipc_attr.threshold.send_lmt_sz) {
         if (dt_contig) {
+            if (ipc_attr.gpu_attr.type == MPL_GPU_POINTER_DEV)
+                mpi_errno =
+                    MPIDI_GPU_ipc_handle_create(vaddr, rank, comm, ipc_attr.gpu_attr.device,
+                                                &ipc_attr.ipc_handle.gpu);
+            else
+                mpi_errno =
+                    MPIDI_XPMEM_ipc_handle_create(vaddr, data_sz, &ipc_attr.ipc_handle.xpmem);
+            MPIR_ERR_CHECK(mpi_errno);
+
             mpi_errno = MPIDI_IPCI_send_contig_lmt(buf, count, datatype, data_sz, rank, tag, comm,
                                                    context_offset, addr, ipc_attr, request);
             MPIR_ERR_CHECK(mpi_errno);

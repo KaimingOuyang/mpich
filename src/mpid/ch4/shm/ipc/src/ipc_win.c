@@ -83,10 +83,18 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
     MPIR_GPU_query_pointer_attr(win->base, &ipc_attr.gpu_attr);
 
     if (ipc_attr.gpu_attr.type == MPL_GPU_POINTER_DEV) {
-        mpi_errno = MPIDI_GPU_get_ipc_attr(win->base, &ipc_attr);
+        mpi_errno = MPIDI_GPU_get_ipc_attr(&ipc_attr);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        mpi_errno =
+            MPIDI_GPU_ipc_handle_create(win->base, shm_comm_ptr->rank, shm_comm_ptr,
+                                        ipc_attr.gpu_attr.device, &ipc_attr.ipc_handle.gpu);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
-        mpi_errno = MPIDI_XPMEM_get_ipc_attr(win->base, win->size, &ipc_attr);
+        mpi_errno = MPIDI_XPMEM_get_ipc_attr(&ipc_attr);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        mpi_errno = MPIDI_XPMEM_ipc_handle_create(win->base, win->size, &ipc_attr.ipc_handle.xpmem);
         MPIR_ERR_CHECK(mpi_errno);
     }
 

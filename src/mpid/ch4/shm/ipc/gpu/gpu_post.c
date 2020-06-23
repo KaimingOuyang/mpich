@@ -7,24 +7,43 @@
 #include "gpu_pre.h"
 #include "gpu_types.h"
 
-int MPIDI_GPU_get_ipc_attr(const void *vaddr, MPIDI_IPCI_ipc_attr_t * ipc_attr)
+int MPIDI_GPU_ipc_handle_create(const void *vaddr, int rank, MPIR_Comm * comm,
+                                MPL_gpu_device_handle_t device, MPIDI_GPU_ipc_handle_t * handle)
 {
-    int mpi_errno = MPI_SUCCESS, mpl_err = MPL_SUCCESS;
+    int mpi_errno = MPI_SUCCESS;
+
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_IPC_HANDLE_CREATE);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_IPC_HANDLE_CREATE);
+
+#ifdef MPIDI_CH4_SHM_ENABLE_GPU
+    int local_dev_id, grank, mpl_err;
+    MPIDI_GPUI_dev_id_t *tmp;
+    grank = MPIDIU_rank_to_lpid(rank, comm);
+    mpl_err =
+        MPL_gpu_ipc_handle_create(vaddr, MPIDI_GPUI_global.local_ranks[grank], &handle->ipc_handle);
+    MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER,
+                        "**gpu_ipc_handle_create");
+
+    MPL_gpu_get_dev_id(device, &local_dev_id);
+    HASH_FIND_INT(MPIDI_GPUI_global.local_to_global_map, &local_dev_id, tmp);
+    handle->global_dev_id = tmp->global_dev_id;
+#endif
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_GPU_IPC_HANDLE_CREATE);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+int MPIDI_GPU_get_ipc_attr(MPIDI_IPCI_ipc_attr_t * ipc_attr)
+{
+    int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_GET_IPC_ATTR);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_GET_IPC_ATTR);
 
 #ifdef MPIDI_CH4_SHM_ENABLE_GPU
-    int local_dev_id;
-    MPIDI_GPUI_dev_id_t *tmp;
-
     ipc_attr->ipc_type = MPIDI_IPCI_TYPE__GPU;
-    mpl_err = MPL_gpu_ipc_handle_create(vaddr, &ipc_attr->ipc_handle.gpu.ipc_handle);
-    MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER,
-                        "**gpu_ipc_handle_create");
-
-    MPL_gpu_get_dev_id(ipc_attr->gpu_attr.device, &local_dev_id);
-    HASH_FIND_INT(MPIDI_GPUI_global.local_to_global_map, &local_dev_id, tmp);
-    ipc_attr->ipc_handle.gpu.global_dev_id = tmp->global_dev_id;
     ipc_attr->threshold.send_lmt_sz = MPIR_CVAR_CH4_IPC_GPU_P2P_THRESHOLD;
 #else
     /* Do not support IPC data transfer */
