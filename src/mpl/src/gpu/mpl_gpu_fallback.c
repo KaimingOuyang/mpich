@@ -26,12 +26,6 @@ int MPL_gpu_ipc_handle_map(MPL_gpu_ipc_mem_handle_t ipc_handle, MPL_gpu_device_h
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_ipc_handle_unmap(void *ptr, MPL_gpu_ipc_mem_handle_t ipc_handle)
-{
-    abort();
-    return MPL_ERR_GPU_INTERNAL;
-}
-
 int MPL_gpu_malloc_host(void **ptr, size_t size)
 {
     *ptr = MPL_malloc(size, MPL_MEM_BUFFER);
@@ -66,7 +60,8 @@ int MPL_gpu_free(void *ptr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_init(int *device_count, int *max_dev_id_ptr)
+int MPL_gpu_init(int local_size, int node_rank, int need_thread_safety, int *device_count,
+                 int *max_dev_id_ptr)
 {
     return MPL_SUCCESS;
 }
