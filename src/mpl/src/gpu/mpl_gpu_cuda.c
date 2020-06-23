@@ -5,20 +5,38 @@
 
 #include "mpl.h"
 #include <assert.h>
+#include <libcuhook.h>
 
 #define CUDA_ERR_CHECK(ret) if (unlikely((ret) != cudaSuccess)) goto fn_fail
 #define CU_ERR_CHECK(ret) if (unlikely((ret) != CUDA_SUCCESS)) goto fn_fail
+#define MPL_ERR_CHECK(ret) if (unlikely((ret) != MPL_SUCCESS)) goto fn_fail
+
+typedef struct gpu_free_hook {
+    void (*free_hook) (void *dptr);
+    struct gpu_free_hook *next;
+} gpu_free_hook_s;
 
 typedef struct {
     uintptr_t remote_base_addr;
     uintptr_t mapped_base_addr;
 } gpu_ipc_handle_obj_s;
 
+enum {
+    IPC_HANDLE_VALID = 0,
+    IPC_HANDLE_MAP_REQUIRE,
+};
+
 static MPL_gavl_tree_t **cuda_ipc_handle_trees;
+static MPL_gavl_tree_t *cuda_ipc_handle_valid_trees;
 static int node_local_size;
 static int node_local_rank;
 static int node_device_count;
+static gpu_free_hook_s *free_hook_chain = NULL;
+
 static void gpu_ipc_handle_free(void *ipc_handle);
+static int gpu_mem_hook_init();
+static void gpu_cudafree_hook(void *dptr);
+static void gpu_ipc_handle_status_free(void *handle_obj);
 
 int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr)
 {
@@ -57,26 +75,46 @@ int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr)
     return MPL_ERR_GPU_INTERNAL;
 }
 
-int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_handle)
+int MPL_gpu_ipc_handle_create(const void *ptr, int rank, MPL_gpu_ipc_mem_handle_t * ipc_handle)
 {
     cudaError_t ret;
     CUresult curet;
     CUdeviceptr pbase;
+    int mpl_err = MPL_SUCCESS;
     size_t len;
-    struct cudaPointerAttributes ptr_attr;
+    MPL_gpu_ipc_mem_handle_t *ipc_handle_ptr;
 
     curet = cuMemGetAddressRange(&pbase, &len, (CUdeviceptr) ptr);
     CU_ERR_CHECK(curet);
 
-    ipc_handle->remote_base_addr = (uintptr_t) pbase;
-    ipc_handle->len = len;
-    ipc_handle->node_rank = node_local_rank;
-    ret = cudaPointerGetAttributes(&ptr_attr, ptr);
+    /* check whether current dev buffer has been cached */
+    mpl_err =
+        MPL_gavl_tree_search(cuda_ipc_handle_valid_trees[rank], (void *) pbase,
+                             (uintptr_t) len, (void **) &ipc_handle_ptr);
+    MPL_ERR_CHECK(mpl_err);
 
-    ret = cudaIpcGetMemHandle(&ipc_handle->handle, (void *) pbase);
-    CUDA_ERR_CHECK(ret);
+    if (ipc_handle_ptr == NULL) {
+        ipc_handle_ptr =
+            (MPL_gpu_ipc_mem_handle_t *) MPL_malloc(sizeof(MPL_gpu_ipc_mem_handle_t),
+                                                    MPL_MEM_OTHER);
+        ipc_handle_ptr->handle_status = IPC_HANDLE_MAP_REQUIRE;
+        ipc_handle_ptr->remote_base_addr = (uintptr_t) pbase;
+        ipc_handle_ptr->len = len;
+        ipc_handle_ptr->node_rank = node_local_rank;
+        ret = cudaIpcGetMemHandle(&ipc_handle_ptr->handle, (void *) pbase);
+        CUDA_ERR_CHECK(ret);
+    }
 
-    ipc_handle->offset = (uintptr_t) ptr - (uintptr_t) pbase;
+    ipc_handle_ptr->offset = (uintptr_t) ptr - (uintptr_t) pbase;
+    *ipc_handle = *ipc_handle_ptr;
+
+    if (ipc_handle_ptr->handle_status != IPC_HANDLE_VALID) {
+        ipc_handle_ptr->handle_status = IPC_HANDLE_VALID;
+        mpl_err =
+            MPL_gavl_tree_insert(cuda_ipc_handle_valid_trees[rank],
+                                 (void *) pbase, (uintptr_t) len, ipc_handle_ptr);
+        MPL_ERR_CHECK(mpl_err);
+    }
 
   fn_exit:
     return MPL_SUCCESS;
@@ -92,44 +130,50 @@ int MPL_gpu_ipc_handle_map(MPL_gpu_ipc_mem_handle_t ipc_handle, MPL_gpu_device_h
     int mpl_err = MPL_SUCCESS;
     int node_rank;
     void *pbase;
-    gpu_ipc_handle_obj_s *handle_obj;
+    gpu_ipc_handle_obj_s *handle_obj = NULL;
 
     node_rank = ipc_handle.node_rank;
-    mpl_err =
-        MPL_gavl_tree_search(cuda_ipc_handle_trees[node_rank][dev_handle],
-                             (void *) ipc_handle.remote_base_addr, ipc_handle.len,
-                             (void **) &handle_obj);
-    if (mpl_err != MPL_SUCCESS)
-        goto fn_fail;
+
+    if (ipc_handle.handle_status == IPC_HANDLE_VALID) {
+        /* ipc handle is valid, just reuse buffer */
+        mpl_err =
+            MPL_gavl_tree_search(cuda_ipc_handle_trees[node_rank][dev_handle],
+                                 (void *) ipc_handle.remote_base_addr, ipc_handle.len,
+                                 (void **) &handle_obj);
+        MPL_ERR_CHECK(mpl_err);
+    } else if (ipc_handle.handle_status == IPC_HANDLE_MAP_REQUIRE) {
+        for (int i = 0; i < node_device_count; ++i) {
+            mpl_err =
+                MPL_gavl_tree_delete(cuda_ipc_handle_trees[node_rank][i],
+                                     (void *) ipc_handle.remote_base_addr, ipc_handle.len);
+            MPL_ERR_CHECK(mpl_err);
+        }
+    }
 
     if (handle_obj == NULL) {
-        cudaError_t ret;
-        int prev_devid;
-        void *pbase;
-
+        /* need to cache buffer handle */
         handle_obj =
             (gpu_ipc_handle_obj_s *) MPL_malloc(sizeof(gpu_ipc_handle_obj_s), MPL_MEM_OTHER);
         assert(handle_obj != NULL);
+
         cudaGetDevice(&prev_devid);
         cudaSetDevice(dev_handle);
         ret = cudaIpcOpenMemHandle(&pbase, ipc_handle.handle, cudaIpcMemLazyEnablePeerAccess);
         CUDA_ERR_CHECK(ret);
-
-        *ptr = (void *) ((char *) pbase + ipc_handle.offset);
-
         cudaSetDevice(prev_devid);
+
         handle_obj->remote_base_addr = ipc_handle.remote_base_addr;
         handle_obj->mapped_base_addr = (uintptr_t) pbase;
         mpl_err =
             MPL_gavl_tree_insert(cuda_ipc_handle_trees[node_rank][dev_handle],
                                  (void *) ipc_handle.remote_base_addr, ipc_handle.len,
                                  (void *) handle_obj);
-        if (mpl_err != MPL_SUCCESS)
-            goto fn_fail;
+        MPL_ERR_CHECK(mpl_err);
+
+        *ptr = (void *) ((char *) pbase + ipc_handle.offset);
     } else {
-        *ptr =
-            (void *) (ipc_handle.remote_base_addr - handle_obj->remote_base_addr +
-                      handle_obj->mapped_base_addr);
+        /* find cached buffer */
+        *ptr = (void *) (ipc_handle.offset + handle_obj->mapped_base_addr);
     }
 
   fn_exit:
@@ -255,6 +299,11 @@ int MPL_gpu_init(int local_size, int node_rank, int *device_count, int *max_dev_
     assert(cuda_ipc_handle_trees != NULL);
     memset(cuda_ipc_handle_trees, 0, sizeof(MPL_gavl_tree_t *) * local_size);
 
+    cuda_ipc_handle_valid_trees =
+        (MPL_gavl_tree_t *) MPL_malloc(sizeof(MPL_gavl_tree_t) * local_size, MPL_MEM_OTHER);
+    assert(cuda_ipc_handle_valid_trees != NULL);
+    memset(cuda_ipc_handle_valid_trees, 0, sizeof(MPL_gavl_tree_t) * local_size);
+
     for (int i = 0; i < local_size; ++i) {
         cuda_ipc_handle_trees[i] =
             (MPL_gavl_tree_t *) MPL_malloc(sizeof(MPL_gavl_tree_t) * count, MPL_MEM_OTHER);
@@ -265,10 +314,19 @@ int MPL_gpu_init(int local_size, int node_rank, int *device_count, int *max_dev_
             mpl_err = MPL_gavl_tree_create(gpu_ipc_handle_free, &cuda_ipc_handle_trees[i][j]);
             if (mpl_err != MPL_SUCCESS) {
                 MPL_gpu_finalize();
-                break;
+                goto fn_fail;
             }
         }
+
+        mpl_err = MPL_gavl_tree_create(gpu_ipc_handle_status_free, &cuda_ipc_handle_valid_trees[i]);
+        if (mpl_err != MPL_SUCCESS) {
+            MPL_gpu_finalize();
+            goto fn_fail;
+        }
     }
+
+    gpu_mem_hook_init();
+    MPL_gpu_free_hook_register(gpu_cudafree_hook);
 
   fn_exit:
     return MPL_SUCCESS;
@@ -278,6 +336,8 @@ int MPL_gpu_init(int local_size, int node_rank, int *device_count, int *max_dev_
 
 int MPL_gpu_finalize()
 {
+    gpu_free_hook_s *prev;
+
     if (cuda_ipc_handle_trees) {
         for (int i = 0; i < node_local_size; ++i) {
             for (int j = 0; j < node_device_count; ++j)
@@ -287,6 +347,21 @@ int MPL_gpu_finalize()
         }
     }
     MPL_free(cuda_ipc_handle_trees);
+
+    if (cuda_ipc_handle_valid_trees) {
+        for (int i = 0; i < node_local_size; ++i) {
+            if (cuda_ipc_handle_valid_trees[i])
+                MPL_gavl_tree_free(cuda_ipc_handle_valid_trees[i]);
+        }
+    }
+    MPL_free(cuda_ipc_handle_valid_trees);
+
+    while (free_hook_chain) {
+        prev = free_hook_chain;
+        free_hook_chain = free_hook_chain->next;
+        MPL_free(prev);
+    }
+
     return MPL_SUCCESS;
 }
 
@@ -336,4 +411,60 @@ static void gpu_ipc_handle_free(void *handle_obj)
     cudaIpcCloseMemHandle((void *) handle_obj_ptr->mapped_base_addr);
     MPL_free(handle_obj);
     return;
+}
+
+static void gpu_ipc_handle_status_free(void *handle_obj)
+{
+    MPL_free(handle_obj);
+    return;
+}
+
+static void gpu_free_hooks_cb(void *dptr)
+{
+    gpu_free_hook_s *current = free_hook_chain;
+    while (current) {
+        current->free_hook(dptr);
+        current = current->next;
+    }
+    return;
+}
+
+static int gpu_mem_hook_init()
+{
+    cuHookRegisterCallback(CU_HOOK_MEM_FREE, PRE_CALL_HOOK, (void *) gpu_free_hooks_cb);
+    return MPL_SUCCESS;
+}
+
+static void gpu_cudafree_hook(void *dptr)
+{
+    cudaError_t ret;
+    CUresult curet;
+    CUdeviceptr pbase;
+    size_t len;
+    int mpl_err;
+
+    curet = cuMemGetAddressRange(&pbase, &len, (CUdeviceptr) dptr);
+    assert(curet == CUDA_SUCCESS);
+
+    for (int i = 0; i < node_local_size; ++i) {
+        mpl_err =
+            MPL_gavl_tree_delete(cuda_ipc_handle_valid_trees[i], (void *) pbase, (uintptr_t) len);
+        assert(mpl_err == MPL_SUCCESS);
+    }
+}
+
+int MPL_gpu_free_hook_register(void (*free_hook) (void *dptr))
+{
+    gpu_free_hook_s *hook_obj = MPL_malloc(sizeof(gpu_free_hook_s), MPL_MEM_OTHER);
+    assert(hook_obj);
+    hook_obj->free_hook = free_hook;
+    hook_obj->next = NULL;
+    if (!free_hook_chain)
+        free_hook_chain = hook_obj;
+    else {
+        hook_obj->next = free_hook_chain;
+        free_hook_chain = hook_obj;
+    }
+
+    return MPL_SUCCESS;
 }
