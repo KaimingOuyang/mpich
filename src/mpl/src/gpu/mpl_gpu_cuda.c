@@ -3,9 +3,10 @@
  *      See COPYRIGHT in top-level directory.
  */
 
+#define _GNU_SOURCE
+#include <dlfcn.h>
 #include "mpl.h"
 #include <assert.h>
-#include <libcuhook.h>
 
 #define CUDA_ERR_CHECK(ret) if (unlikely((ret) != cudaSuccess)) goto fn_fail
 #define CU_ERR_CHECK(ret) if (unlikely((ret) != CUDA_SUCCESS)) goto fn_fail
@@ -32,6 +33,9 @@ static int node_local_size;
 static int node_local_rank;
 static int node_device_count;
 static gpu_free_hook_s *free_hook_chain = NULL;
+
+static CUresult CUDAAPI(*sys_cuMemFree) (CUdeviceptr dptr);
+static cudaError_t CUDARTAPI(*sys_cudaFree) (void *dptr);
 
 static void gpu_ipc_handle_free(void *ipc_handle);
 static int gpu_mem_hook_init();
@@ -445,7 +449,8 @@ static void gpu_free_hooks_cb(void *dptr)
 
 static int gpu_mem_hook_init()
 {
-    cuHookRegisterCallback(CU_HOOK_MEM_FREE, PRE_CALL_HOOK, (void *) gpu_free_hooks_cb);
+    sys_cuMemFree = (void *) dlsym(RTLD_NEXT, "cuMemFree");
+    sys_cudaFree = (void *) dlsym(RTLD_NEXT, "cudaFree");
     return MPL_SUCCESS;
 }
 
@@ -480,4 +485,20 @@ int MPL_gpu_free_hook_register(void (*free_hook) (void *dptr))
     }
 
     return MPL_SUCCESS;
+}
+
+CUresult CUDAAPI cuMemFree(CUdeviceptr dptr)
+{
+    CUresult result;
+    gpu_free_hooks_cb((void *) dptr);
+    result = sys_cuMemFree(dptr);
+    return (result);
+}
+
+cudaError_t CUDARTAPI cudaFree(void *dptr)
+{
+    cudaError_t result;
+    gpu_free_hooks_cb(dptr);
+    result = sys_cudaFree(dptr);
+    return result;
 }
