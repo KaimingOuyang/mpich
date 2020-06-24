@@ -15,6 +15,7 @@ typedef struct {
     int node_rank;
     cudaIpcMemHandle_t handle;
     uintptr_t offset;
+    int handle_status;
 } MPL_gpu_ipc_mem_handle_t;
 typedef int MPL_gpu_device_handle_t;
 #define MPL_GPU_DEVICE_INVALID -1

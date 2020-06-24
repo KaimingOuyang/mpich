@@ -30,7 +30,8 @@ typedef struct {
 
 int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr);
 
-int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_handle);
+int MPL_gpu_ipc_handle_cache(int rank, MPL_gpu_ipc_mem_handle_t ipc_handle);
+int MPL_gpu_ipc_handle_create(const void *ptr, int rank, MPL_gpu_ipc_mem_handle_t * ipc_handle);
 int MPL_gpu_ipc_handle_map(MPL_gpu_ipc_mem_handle_t ipc_handle, MPL_gpu_device_handle_t dev_handle,
                            void **ptr);
 
@@ -49,5 +50,7 @@ int MPL_gpu_finalize(void);
 int MPL_gpu_get_dev_id(MPL_gpu_device_handle_t dev_handle, int *dev_id);
 int MPL_gpu_get_dev_handle(int dev_id, MPL_gpu_device_handle_t * dev_handle);
 int MPL_gpu_get_global_dev_ids(int *global_ids, int count);
+
+int MPL_gpu_free_hook_register(void (*free_hook) (void *dptr));
 
 #endif /* ifndef MPL_GPU_H_INCLUDED */
