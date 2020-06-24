@@ -159,7 +159,7 @@ int MPL_gpu_finalize()
     return MPL_SUCCESS;
 }
 
-int MPL_gpu_ipc_handle_create(const void *ptr, MPL_gpu_ipc_mem_handle_t * ipc_handle)
+int MPL_gpu_ipc_handle_create(const void *ptr, int rank, MPL_gpu_ipc_mem_handle_t * ipc_handle)
 {
     int mpl_err;
     ze_result_t ret;
@@ -356,6 +356,16 @@ static void gpu_ipc_handle_free(void *handle_obj)
                               handle_obj_ptr->mapped_base_addr - handle_obj_ptr->offset);
     MPL_free(handle_obj);
     return;
+}
+
+int MPL_gpu_free_hook_register(void (*free_hook) (void *dptr))
+{
+    return MPL_SUCCESS;
+}
+
+int MPL_gpu_ipc_handle_cache(int rank, MPL_gpu_ipc_mem_handle_t ipc_handle)
+{
+    return MPL_SUCCESS;
 }
 
 #endif /* MPL_HAVE_ZE */

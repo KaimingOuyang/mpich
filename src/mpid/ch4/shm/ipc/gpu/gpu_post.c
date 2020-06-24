@@ -7,18 +7,43 @@
 #include "gpu_pre.h"
 #include "gpu_types.h"
 
-int MPIDI_GPU_get_ipc_attr(const void *vaddr, MPIDI_IPCI_ipc_attr_t * ipc_attr)
+int MPIDI_GPU_ipc_handle_cache(int rank, MPIR_Comm * comm, MPIDI_GPU_ipc_handle_t handle)
 {
-    int mpi_errno = MPI_SUCCESS, mpl_err = MPL_SUCCESS;
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_IPC_HANDLE_CACHE);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_IPC_HANDLE_CACHE);
+
+#ifdef MPIDI_CH4_SHM_ENABLE_GPU
+    int mpl_err;
+    int recv_lrank = MPIDI_GPUI_global.local_ranks[MPIDIU_rank_to_lpid(rank, comm)];
+    mpl_err = MPL_gpu_ipc_handle_cache(recv_lrank, handle.ipc_handle);
+    MPIR_ERR_CHKANDSTMT(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER, goto fn_fail,
+                        "**gpu_ipc_handle_cache");
+#endif
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_GPU_IPC_HANDLE_CACHE);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+int MPIDI_GPU_get_ipc_attr(const void *vaddr, int rank, MPIR_Comm * comm,
+                           MPIDI_IPCI_ipc_attr_t * ipc_attr)
+{
+    int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_GPU_GET_IPC_ATTR);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_GPU_GET_IPC_ATTR);
 
 #ifdef MPIDI_CH4_SHM_ENABLE_GPU
-    int local_dev_id;
+    int local_dev_id, mpl_err = MPL_SUCCESS, grank;
     MPIDI_GPUI_dev_id_t *tmp;
 
+    grank = MPIDIU_rank_to_lpid(rank, comm);
     ipc_attr->ipc_type = MPIDI_IPCI_TYPE__GPU;
-    mpl_err = MPL_gpu_ipc_handle_create(vaddr, &ipc_attr->ipc_handle.gpu.ipc_handle);
+    mpl_err =
+        MPL_gpu_ipc_handle_create(vaddr, MPIDI_GPUI_global.local_ranks[grank],
+                                  &ipc_attr->ipc_handle.gpu.ipc_handle);
     MPIR_ERR_CHKANDJUMP(mpl_err != MPL_SUCCESS, mpi_errno, MPI_ERR_OTHER,
                         "**gpu_ipc_handle_create");
 
