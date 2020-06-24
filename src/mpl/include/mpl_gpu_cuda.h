@@ -10,6 +10,9 @@
 #include "cuda_runtime_api.h"
 
 typedef struct {
+    uintptr_t remote_base_addr;
+    uintptr_t len;
+    int node_rank;
     cudaIpcMemHandle_t handle;
     uintptr_t offset;
 } MPL_gpu_ipc_mem_handle_t;
