@@ -589,7 +589,7 @@ static int am_recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq)
                          "Expected seqno=%d but got %d (am_type=%d addr=%" PRIx64 "). "
                          "Enqueueing it to the queue.\n",
                          expected_seqno, am_hdr->seqno, am_hdr->am_type, am_hdr->fi_src_addr));
-        mpi_errno = MPIDI_OFI_am_enqueue_unordered_msg(am_hdr);
+        mpi_errno = MPIDI_OFI_am_enqueue_unordered_msg(wc->buf);
         MPIR_ERR_CHECK(mpi_errno);
         goto fn_exit;
     }
@@ -609,7 +609,10 @@ static int am_recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq)
             break;
 
         case MPIDI_AMTYPE_SHORT:
-            p_data = (char *) wc->buf + sizeof(*am_hdr) + am_hdr->am_hdr_sz;
+            if(uo_msg)
+                p_data = (char *) am_hdr + sizeof(*am_hdr) + am_hdr->am_hdr_sz;
+            else
+                p_data = (char *) wc->buf + sizeof(*am_hdr) + am_hdr->am_hdr_sz;
             mpi_errno = MPIDI_OFI_handle_short_am(am_hdr, am_hdr + 1, p_data);
 
             MPIR_ERR_CHECK(mpi_errno);
