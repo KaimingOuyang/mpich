@@ -597,6 +597,7 @@ static int am_recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq)
      * when that's the case */
 #define MAX_HDR_SIZE 256        /* need accommodate MPIDI_AMTYPE_RDMA_READ */
     char temp[MAX_HDR_SIZE] MPL_ATTR_ALIGNED(MAX_ALIGNMENT);
+    char amtype_rdma_payload[sizeof(MPIDI_OFI_lmt_msg_payload_t)];
     if ((intptr_t) am_hdr & (MAX_ALIGNMENT - 1)) {
         int temp_size = MAX_HDR_SIZE;
         if (temp_size > wc->len) {
@@ -622,6 +623,15 @@ static int am_recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq)
         MPIR_ERR_CHECK(mpi_errno);
         goto fn_exit;
     }
+#if NEEDS_STRICT_ALIGNMENT
+    if (am_hdr->am_type == MPIDI_AMTYPE_RDMA_READ) {
+        memcpy(amtype_rdma_payload, (char *) wc->buf + sizeof(*am_hdr) + am_hdr->am_hdr_sz,
+               sizeof(MPIDI_OFI_lmt_msg_payload_t));
+        /* instead of point to wc->buf, this orig_buf is only used to locate amtype_rdma_payload
+         * in the follow p_data assignment. */
+        orig_buf = (void *) ((char *) amtype_rdma_payload - sizeof(*am_hdr) - am_hdr->am_hdr_sz);
+    }
+#endif
 
     /* Received an expected message */
   repeat:
@@ -656,7 +666,6 @@ static int am_recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq)
             p_data = (char *) orig_buf + sizeof(*am_hdr) + am_hdr->am_hdr_sz;
             mpi_errno = MPIDI_OFI_handle_rdma_read(am_hdr, am_hdr + 1,
                                                    (MPIDI_OFI_lmt_msg_payload_t *) p_data);
-
             MPIR_ERR_CHECK(mpi_errno);
 
             break;
