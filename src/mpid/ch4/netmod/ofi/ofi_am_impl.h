@@ -212,11 +212,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_am_isend_long(int rank, MPIR_Comm * comm,
         !MPIDI_OFI_ENABLE_MR_VIRT_ADDRESS ? (uint64_t) 0 : (uint64_t) (uintptr_t) data;
 
     lmt_info->sreq_ptr = sreq;
-    if (!MPIDI_OFI_ENABLE_MR_PROV_KEY) {
-        lmt_info->rma_key = MPIDI_OFI_mr_key_alloc();
-    } else {
-        lmt_info->rma_key = 0;
-    }
+    lmt_info->rma_key = MPIDI_OFI_mr_key_alloc();
     lmt_info->reg_sz = data_sz;
 
     MPIR_cc_incr(sreq->cc_ptr, &c);     /* send completion */
@@ -231,11 +227,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_am_isend_long(int rank, MPIR_Comm * comm,
                              lmt_info->rma_key,
                              0ULL, &MPIDI_OFI_AMREQUEST_HDR(sreq, lmt_mr), NULL), mr_reg);
     MPL_atomic_fetch_add_int(&MPIDI_OFI_global.am_inflight_rma_send_mrs, 1);
-
-    if (MPIDI_OFI_ENABLE_MR_PROV_KEY) {
-        /* MR_BASIC */
-        lmt_info->rma_key = fi_mr_key(MPIDI_OFI_AMREQUEST_HDR(sreq, lmt_mr));
-    }
 
     iov = MPIDI_OFI_AMREQUEST_HDR(sreq, iov);
 

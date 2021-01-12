@@ -128,11 +128,7 @@ static int win_allgather(MPIR_Win * win, void *base, int disp_unit)
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_WIN_ALLGATHER);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_WIN_ALLGATHER);
 
-    if (!MPIDI_OFI_ENABLE_MR_PROV_KEY) {
-        MPIDI_OFI_WIN(win).mr_key = MPIDI_OFI_WIN(win).win_id;
-    } else {
-        MPIDI_OFI_WIN(win).mr_key = 0;
-    }
+    MPIDI_OFI_WIN(win).mr_key = MPIDI_OFI_WIN(win).win_id;
 
     /* Register the allocated win buffer or MPI_BOTTOM (NULL) for dynamic win.
      * It is clear that we cannot register NULL when FI_MR_ALLOCATED is set, thus
@@ -177,7 +173,7 @@ static int win_allgather(MPIR_Win * win, void *base, int disp_unit)
     winfo = MPIDI_OFI_WIN(win).winfo;
     winfo[comm_ptr->rank].disp_unit = disp_unit;
 
-    if ((MPIDI_OFI_ENABLE_MR_PROV_KEY || MPIDI_OFI_ENABLE_MR_VIRT_ADDRESS) && MPIDI_OFI_WIN(win).mr) {
+    if (MPIDI_OFI_WIN(win).mr) {
         /* MR_BASIC */
         MPIDI_OFI_WIN(win).mr_key = fi_mr_key(MPIDI_OFI_WIN(win).mr);
         winfo[comm_ptr->rank].mr_key = MPIDI_OFI_WIN(win).mr_key;
@@ -188,21 +184,6 @@ static int win_allgather(MPIR_Win * win, void *base, int disp_unit)
                                MPI_DATATYPE_NULL,
                                winfo, sizeof(*winfo), MPI_BYTE, comm_ptr, &errflag);
     MPIR_ERR_CHECK(mpi_errno);
-
-    if (!MPIDI_OFI_ENABLE_MR_PROV_KEY && !MPIDI_OFI_ENABLE_MR_VIRT_ADDRESS) {
-        first = winfo[0].disp_unit;
-        same_disp = 1;
-        for (i = 1; i < comm_ptr->local_size; i++) {
-            if (winfo[i].disp_unit != first) {
-                same_disp = 0;
-                break;
-            }
-        }
-        if (same_disp) {
-            MPL_free(MPIDI_OFI_WIN(win).winfo);
-            MPIDI_OFI_WIN(win).winfo = NULL;
-        }
-    }
 
     load_acc_hint(win);
 
@@ -840,8 +821,7 @@ int MPIDI_OFI_mpi_win_attach_hook(MPIR_Win * win, void *base, MPI_Aint size)
         goto fn_exit;
 
     uint64_t requested_key = 0ULL;
-    if (!MPIDI_OFI_ENABLE_MR_PROV_KEY)
-        requested_key = MPIDI_OFI_mr_key_alloc();
+    requested_key = MPIDI_OFI_mr_key_alloc();
 
     int rc = 0, allrc = 0;
     struct fid_mr *mr = NULL;
